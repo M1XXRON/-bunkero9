@@ -125,6 +125,24 @@ note(
   "лендинг: «игра уже началась» показано",
 );
 
+// ---------- фавикон: вкладка не должна быть пустой ----------
+for (const [path, type] of [
+  ["/favicon.svg", "image/svg+xml"],
+  ["/favicon-32.png", "image/png"],
+  ["/apple-touch-icon.png", "image/png"],
+  ["/favicon.ico", "image/png"],
+]) {
+  const res = await fetch(`${SITE}${path}`);
+  const kind = res.headers.get("content-type") || "";
+  note(
+    res.status === 200 && kind.includes(type),
+    `фавикон ${path} → ${res.status} ${kind.split(";")[0]}`,
+  );
+}
+const head = await page(H);
+note(/rel="icon"[^>]*favicon\.svg/.test(head), "страница объявляет svg-иконку для вкладки");
+note(/rel="apple-touch-icon"/.test(head), "страница объявляет иконку для iOS");
+
 // ---------- уборка: выходим из комнаты ----------
 for (const sid of [H, ...sids]) await post(sid, "leave", {});
 

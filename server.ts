@@ -434,7 +434,11 @@ function landingHtml(origin: string, error = ""): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#12151c">
 <title>БУНКЕР·9 — Сигнал тишины</title>
+<link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
 <link rel="stylesheet" href="/style.css?v=3">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
@@ -472,7 +476,11 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#12151c">
 <title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
+<link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
 <link rel="stylesheet" href="/style.css?v=3">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
@@ -614,7 +622,23 @@ Bun.serve({
       });
     }
 
-    for (const name of ["/style.css", "/sound.js", "/favicon.ico"]) {
+    // фавикон: SVG — для браузерных вкладок, PNG — для iOS и старых браузеров.
+    // /favicon.ico спрашивают сами браузеры — отдаём 32-px PNG с правильным типом.
+    if (url.pathname === "/favicon.ico") {
+      const file = Bun.file(`${PUBLIC}/favicon-32.png`);
+      if (await file.exists())
+        return new Response(file, {
+          headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" },
+        });
+    }
+
+    for (const name of [
+      "/style.css",
+      "/sound.js",
+      "/favicon.svg",
+      "/favicon-32.png",
+      "/apple-touch-icon.png",
+    ]) {
       if (url.pathname === name) {
         const file = Bun.file(`${PUBLIC}${name}`);
         if (await file.exists()) {

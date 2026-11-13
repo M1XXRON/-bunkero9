@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="БУНКЕР·9">
+  <title>БУНКЕР·9</title>
+  <rect width="64" height="64" rx="15" fill="#12151c"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#f0b357" stroke-opacity="0.35" stroke-width="1.5"/>
+  <circle cx="30" cy="25" r="13" fill="none" stroke="#f0b357" stroke-width="8"/>
+  <path d="M42.5 25 V47" stroke="#f0b357" stroke-width="8" stroke-linecap="round"/>
+</svg>
