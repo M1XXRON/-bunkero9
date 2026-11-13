@@ -19,15 +19,9 @@ echo "· проект: $(pwd)"
 echo "· сервер: $USER_AT"
 
 if [ "${SKIP_VERIFY:-0}" != "1" ]; then
-	echo "· проверки перед выкладкой (bun check + fmt + тесты)"
-	~/.bun/bin/bun check || { echo "  типы не прошли — деплой остановлен"; exit 1; }
-	~/.bun/bin/bun fmt --check || { echo "  формат не прошёл — деплой остановлен"; exit 1; }
-	# тест сам поднимает сервер на свободном порту
-	PORT=3101 BUNKER_TEST=1 "$HOME/.bun/bin/bun" run server.ts > /tmp/bunker-e2e.log 2>&1 &
-	E2E_PID=$!
-	sleep 2
-	"$HOME/.bun/bin/bun" test/sim-bun.mjs || { kill "$E2E_PID" 2>/dev/null; echo "  тесты не прошли — деплой остановлен"; exit 1; }
-	kill "$E2E_PID" 2>/dev/null
+	echo "· проверки перед выкладкой (типы + формат + боты + HTTP-e2e)"
+	# verify сам поднимает серверы на свободных портах с временными базами
+	"$HOME/.bun/bin/bun" run verify || { echo "  проверки не прошли — деплой остановлен"; exit 1; }
 fi
 
 echo ""

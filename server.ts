@@ -155,10 +155,33 @@ function sessionTab(session: Session): string {
   const saved = session.room && snapshot ? tabs.get(session.room + ":" + session.player) : null;
   if (saved === "mafia" && snapshot.chat.mafia) return "mafia";
   if (saved === "dead" && snapshot.chat.dead) return "dead";
-  return snapshot.chat.day ? "day" : snapshot.chat.mafia ? "mafia" : "dead";
+  // запасной вариант — «зал»: в ночи у людей каналов нет вовсе, и подпись
+  // «Сообщение в мёртвых…» на закрытом поле только путала.
+  return snapshot.chat.day
+    ? "day"
+    : snapshot.chat.mafia
+      ? "mafia"
+      : snapshot.chat.dead
+        ? "dead"
+        : "day";
 }
 
 // ---------- широковещание ----------
+
+// Keepalive: Cloudflare (и любой прокси) закрывает простаивающий ответ примерно
+// через 100 с. В тихой фазе (обсуждение — две минуты) событий нет вовсе, и
+// соединение умирало — вкладки замирали до F5. Комментарий SSE не меняет DOM,
+// но держит канал живым. Заодно ловятся мёртвые контроллеры.
+setInterval(() => {
+  for (const session of sessions.values()) {
+    if (!session.stream) continue;
+    try {
+      session.stream.enqueue(enc.encode(": keepalive\n\n"));
+    } catch {
+      session.stream = null;
+    }
+  }
+}, 15_000);
 
 function broadcast(room: any, origin: string) {
   if (process.env.DEBUG_BROADCAST) {
@@ -229,6 +252,19 @@ async function readPayload(req: Request): Promise<Record<string, any>> {
   return {};
 }
 
+// Обычные формы с лендинга не имеют SSE-ленты (#error прилетает только в игровую
+// оболочку), а 204 браузер просто игнорирует — друг с опечаткой в коде комнаты
+// не видел НИЧЕГО. Для форм отдаём 303 на лендинг с текстом, для Datastar/ботов —
+// прежние 204.
+const isFormPost = (req: Request) => (req.headers.get("content-type") ?? "").includes("form");
+
+function landingFail(message: string): Response {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `/?e=${encodeURIComponent(message)}` },
+  });
+}
+
 function fail(session: Session, message: string): Response {
   if (session.stream) {
     try {
@@ -255,13 +291,17 @@ async function handleAction(
 
   switch (cmd) {
     case "create": {
-      if (session.room && session.player) return fail(session, "Вы уже в бункере.");
+      if (session.room && session.player)
+        return isFormPost(req)
+          ? landingFail("Вы уже в бункере.")
+          : fail(session, "Вы уже в бункере.");
       const result = engine.createRoom({
         name: payload.name,
         avatar: payload.avatar || AVATARS[0],
         socketId: sid,
       });
-      if (!result.ok) return fail(session, result.error);
+      if (!result.ok)
+        return isFormPost(req) ? landingFail(result.error) : fail(session, result.error);
       session.room = result.room.code;
       session.player = result.player.id;
       session.phaseKey = "";
@@ -272,14 +312,18 @@ async function handleAction(
     }
     case "join": {
       // двойной клик по «Войти» не должен плодить второго персонажа
-      if (session.room && session.player) return fail(session, "Вы уже в бункере.");
+      if (session.room && session.player)
+        return isFormPost(req)
+          ? landingFail("Вы уже в бункере.")
+          : fail(session, "Вы уже в бункере.");
       const result = engine.joinRoom({
         code: payload.code,
         name: payload.name,
         avatar: payload.avatar || AVATARS[1],
         socketId: sid,
       });
-      if (!result.ok) return fail(session, result.error);
+      if (!result.ok)
+        return isFormPost(req) ? landingFail(result.error) : fail(session, result.error);
       session.room = result.room.code;
       session.player = result.player.id;
       session.phaseKey = "";
@@ -323,8 +367,10 @@ async function handleAction(
       return result?.ok === false ? fail(session, result.error) : done();
     }
     case "tab": {
-      if (session.player)
+      if (session.player && session.room)
         tabs.set(session.room + ":" + session.player, String(payload.tab || "day"));
+      // лента рендерится на сервере — без broadcast клик по табу ничего не меняет
+      if (room) broadcast(room, origin);
       return done();
     }
     case "skip": {
@@ -353,7 +399,12 @@ async function handleAction(
 
 // ---------- страницы ----------
 
+// Текст ошибки приходит из query (?e=...) и попадает в HTML — экранируем.
+const escText = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 function landingHtml(origin: string, error = ""): string {
+  const problem = error ? escText(error).slice(0, 200) : "";
   const avatars = AVATARS.map(
     (a, i) =>
       `<input type="radio" name="avatar" id="av${i}" value="${a}" ${i === 0 ? "checked" : ""}><label for="av${i}">${a}</label>`,
@@ -374,7 +425,7 @@ function landingHtml(origin: string, error = ""): string {
     <ul class="facts"><li>5–15 игроков</li><li>день и ночь</li><li>один голос — один изгнанный</li></ul>
   </section>
   <section class="landing-card panel">
-    ${error ? `<p class="toast show">${error}</p>` : ""}
+    ${problem ? `<p class="toast show">${problem}</p>` : ""}
     <form method="post" action="/act/create" class="stack">
       <span class="eyebrow">СОЗДАТЬ БУНКЕР</span>
       <label>Позывной <input name="name" maxlength="16" required placeholder="Например, Ворон"></label>
@@ -395,7 +446,7 @@ function landingHtml(origin: string, error = ""): string {
 </main></body></html>`;
 }
 
-function appHtml(snapshot: any, origin: string): string {
+function appHtml(snapshot: any, origin: string, tab = "day"): string {
   return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -405,7 +456,7 @@ function appHtml(snapshot: any, origin: string): string {
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
-${renderApp(snapshot, origin)}
+${renderApp(snapshot, origin, tab)}
 <script>
 // лента и модалки живут вне патчей, но ошибки сервера надо уметь гасить
 document.addEventListener('click', (e) => {
@@ -481,6 +532,16 @@ Bun.serve({
       const data = snapshotFor(session);
       if (!data) return new Response(null, { status: 204 });
 
+      // После рестарта сервера resumeRoom помечает всех offline. broadcast() таким
+      // игрокам не шлёт НИЧЕГО — вкладка получала один снимок и замирала навсегда,
+      // хотя соединение живое. Живой поток = игрок снова онлайн.
+      if (data.player.connected === false) {
+        data.player.connected = true;
+        data.player.disconnectedAt = null;
+        saveRoom(data.room);
+        broadcast(data.room, origin);
+      }
+
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           session.stream = controller;
@@ -522,11 +583,12 @@ Bun.serve({
       const session = sessionOf(sid);
       const data = snapshotFor(session);
       if (data) {
-        return new Response(appHtml(data.snapshot, origin), {
+        return new Response(appHtml(data.snapshot, origin, sessionTab(session)), {
           headers: { "content-type": "text/html; charset=utf-8", ...cookieFor(sid) },
         });
       }
-      return new Response(landingHtml(origin), {
+      const note = url.searchParams.get("e") || "";
+      return new Response(landingHtml(origin, note), {
         headers: { "content-type": "text/html; charset=utf-8", ...cookieFor(sid) },
       });
     }

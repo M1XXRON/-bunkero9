@@ -115,12 +115,25 @@ function avatar(
 
 // ---------- верхняя панель ----------
 
+// Крестик стоит рядом с «Правилами» и на телефоне его ловят пальцем мимо: в
+// партии выход = смерть с раскрытием роли, так что спрашиваем подтверждение.
+function leaveButton(snap: Snapshot): string {
+  const title = ' title="Выйти"';
+  if (snap.state === "lobby")
+    return `<button class="icon-btn"${title} data-on:click="@post('/act/leave', {retry: 'never'})">×</button>`;
+  return `<button class="icon-btn"${title} data-on:click="confirm('Выйти из бункера? Персонаж погибнет, роль раскроется.') && @post('/act/leave', {retry: 'never'})">×</button>`;
+}
+
 function topbar(snap: Snapshot): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
+  // Внимание: __ifmissing здесь нельзя. Топбар морфится на каждом патче, а сигнал
+  // endsAt живёт дольше элемента: с __ifmissing таймер замирал на значении первой
+  // фазы (0с на всю партию). Поэтому endsAt перезаписывается каждый раз, а left
+  // сервер считает сам — чтобы цифра была верной сразу после патча.
   const timer = snap.phaseEndsAt
     ? `<span class="phase-timer"
-         data-signals__ifmissing="{endsAt: ${snap.phaseEndsAt}, left: 0}"
+         data-signals="{endsAt: ${snap.phaseEndsAt}, left: ${Math.max(0, Math.round((snap.phaseEndsAt - Date.now()) / 1000))}}"
          data-on-interval__duration.250ms="$left = Math.max(0, Math.round(($endsAt - Date.now()) / 1000))"
          data-class="{urgent: $left <= 10}"
          data-text="$left + 'с'"></span>`
@@ -149,7 +162,7 @@ function topbar(snap: Snapshot): string {
     <div class="top-actions">
       <button class="btn btn-secondary btn-small" data-on:click="document.getElementById('dossier').showModal()">Досье</button>
       <button class="btn btn-ghost btn-small" data-on:click="document.getElementById('rules').showModal()">Правила</button>
-      <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Выйти">×</button>
+      ${leaveButton(snap)}
     </div>
   </header>`;
 }
@@ -489,12 +502,15 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
     snap.chat.mafia ? "mafia" : null,
     snap.chat.dead ? "dead" : null,
   ].filter(Boolean) as string[];
+  const label: Record<string, string> = { day: "ЗАЛ", mafia: "ШЁПОТ", dead: "МЁРТВЫЕ" };
+  // Активный канал — серверное состояние (/act/tab), не сигнал: лента рендерится
+  // на сервере, поэтому клик по «ШЁПОТ» не менял ничего до отправки сообщения.
   const tabs =
     allowed.length > 1
       ? `<div class="chat-tabs">${allowed
           .map(
-            (ch) => `<button class="chat-tab" data-on:click="$tab = '${ch}'"
-          data-class="{'on': $tab === '${ch}'}">${{ day: "ЗАЛ", mafia: "ШЁПОТ", dead: "МЁРТВЫЕ" }[ch]}</button>`,
+            (ch) =>
+              `<button class="chat-tab${ch === activeTab ? " on" : ""}" data-on:click="@post('/act/tab', {payload: {tab: '${ch}'}, retry: 'never'})">${label[ch]}</button>`,
           )
           .join("")}</div>`
       : "";
@@ -504,9 +520,9 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
       <div id="chatTabs">${tabs}</div>
       <div class="chat-feed" id="chatFeed" role="log" aria-live="polite" aria-relevant="additions" aria-label="Лента чата">${feedHtml(snap, activeTab)}</div>
       <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
-        <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в зал…"
+        <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в ${{ day: "зал", mafia: "шёпот", dead: "мёртвых" }[activeTab] || "зал"}…"
           data-bind="msg" data-preserve-attr="value" ${allowed.length ? "" : "disabled"}>
-        <input type="hidden" name="channel" data-attr:value="$tab || 'day'">
+        <input type="hidden" name="channel" value="${activeTab}">
         <button type="submit" class="send-btn" ${allowed.length ? "" : "disabled"}>→</button>
       </form>
     </section>`;
@@ -578,16 +594,16 @@ function rules(): string {
 // Контракт стилей: #game — flex-колонка, прямыми потомками идут #topbar и
 // #board (он же .game-grid), внутри — три колонки. Патчи заменяют эти узлы.
 
-export function renderApp(snap: Snapshot, origin: string): string {
-  const signals = `{reveal: false, msg: '', tab: '${snap.chat.day ? "day" : snap.chat.mafia ? "mafia" : "dead"}'}`;
+export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
+  const signals = `{reveal: false, msg: ''}`;
   // Оболочка одна на всё приложение: если менять её id при переходе
   // лобби -> игра, старые правила лобби продолжают применяться к игре.
   const stateClass = snap.state === "lobby" ? "state-lobby" : "state-game";
-  return `<div id="app" data-signals="${signals}" data-init="@get('/stream')">
+  return `<div id="app" data-signals="${signals}" data-init="@get('/stream', {retry: 'always', retryMaxWait: 5000, retryMaxCount: 100000})">
     <section id="shell" class="screen ${stateClass}">
       ${topbar(snap)}
       <div id="banner" class="phase-banner"></div>
-      ${renderBoard(snap, origin)}
+      ${renderBoard(snap, origin, tab)}
       <dialog id="dossier" class="sheet" aria-labelledby="dossierTitle">
         <div id="dossierBody">${dossierBody(snap)}</div>
       </dialog>
@@ -617,7 +633,7 @@ export function renderTopbar(snap: Snapshot): string {
   return topbar(snap);
 }
 
-export function renderTabs(snap: Snapshot): string {
+export function renderTabs(snap: Snapshot, activeTab = "day"): string {
   const allowed = [
     snap.chat.day ? "day" : null,
     snap.chat.mafia ? "mafia" : null,
@@ -629,7 +645,7 @@ export function renderTabs(snap: Snapshot): string {
       ? allowed
           .map(
             (ch) =>
-              `<button class="chat-tab" data-on:click="$tab = '${ch}'" data-class="{'on': $tab === '${ch}'}">${labels[ch]}</button>`,
+              `<button class="chat-tab${ch === activeTab ? " on" : ""}" data-on:click="@post('/act/tab', {payload: {tab: '${ch}'}, retry: 'never'})">${labels[ch]}</button>`,
           )
           .join("")
       : "";
