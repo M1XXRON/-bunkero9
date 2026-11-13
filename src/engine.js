@@ -210,6 +210,37 @@ function accelerate(room, ms) {
   armTimer(room, ms);
 }
 
+// Восстановление комнаты из базы: таймер и timeoutFn не сериализуются,
+// поэтому по текущей фазе заново выбираем функцию продолжения.
+const PHASE_TIMEOUTS = {
+  intro: (room) => beginDay(room),
+  reveal: (room) => finishReveal(room),
+  discussion: (room) => startVote(room),
+  vote: (room) => resolveVote(room),
+  night: (room) => resolveNight(room),
+};
+
+function resumeRoom(room) {
+  room.timer = null;
+  room.timeoutFn = null;
+  room.phaseToken = (room.phaseToken || 0) + 1;
+  room.players = (room.players || []).map((player) => ({
+    ...player,
+    socketId: null,
+    connected: false,
+    disconnectedAt: player.disconnectedAt ?? Date.now(),
+  }));
+  if (room.state === 'lobby' || room.state === 'end') return room;
+  const next = PHASE_TIMEOUTS[room.state];
+  if (!next) return room;
+  room.timeoutFn = () => next(room);
+  const remaining = Math.max(1000, (room.phaseEndsAt || Date.now() + 5000) - Date.now());
+  room.phaseEndsAt = Date.now() + remaining;
+  room.phaseStartedAt = room.phaseStartedAt || Date.now();
+  armTimer(room, remaining);
+  return room;
+}
+
 function finishGame(room, winner) {
   clearTimeout(room.timer);
   room.phaseToken += 1;
@@ -1200,6 +1231,7 @@ module.exports = {
   kickPlayer,
   serializeFor,
   cleanupRooms,
+  resumeRoom,
   roleCounts,
   MIN_PLAYERS,
   MAX_PLAYERS,

@@ -7,3 +7,7 @@ coverage/
 public/vendor/
 src/engine.js
 src/content.js
+data/
+*.db
+*.db-wal
+*.db-shm

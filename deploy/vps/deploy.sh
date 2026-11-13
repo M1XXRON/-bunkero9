@@ -45,7 +45,7 @@ ssh "${SSH_OPTS[@]}" "$USER_AT" "echo '  ssh ok · ' \$(hostname)" || {
 
 echo ""
 echo "· готовлю каталоги"
-ssh "${SSH_OPTS[@]}" "$USER_AT" "mkdir -p $REMOTE_DIR/app/dist $REMOTE_DIR/deploy"
+ssh "${SSH_OPTS[@]}" "$USER_AT" "mkdir -p $REMOTE_DIR/app/dist $REMOTE_DIR/app/data $REMOTE_DIR/deploy"
 
 echo "· копирую бинарник"
 rsync -az -e "ssh ${SSH_OPTS[*]}" dist/bunker9 "$USER_AT:$REMOTE_DIR/app/dist/bunker9"
@@ -53,7 +53,7 @@ rsync -az -e "ssh ${SSH_OPTS[*]}" dist/bunker9 "$USER_AT:$REMOTE_DIR/app/dist/bu
 echo "· копирую код"
 rsync -az --delete \
 	-e "ssh ${SSH_OPTS[*]}" \
-	--exclude node_modules --exclude .git --exclude test \
+	--exclude node_modules --exclude .git --exclude test --exclude data \
 	--exclude screenshots --exclude deploy --exclude node_modules \
 	./ "$USER_AT:$REMOTE_DIR/app/"
 
@@ -66,7 +66,7 @@ ssh "${SSH_OPTS[@]}" "$USER_AT" "DOMAIN=$DOMAIN bash $REMOTE_DIR/deploy/bootstra
 
 echo ""
 echo "· права"
-ssh "${SSH_OPTS[@]}" "$USER_AT" "set -e; chown -R bunker:bunker $REMOTE_DIR; chmod +x $REMOTE_DIR/app/dist/bunker9"
+ssh "${SSH_OPTS[@]}" "$USER_AT" "set -e; chown -R bunker:bunker $REMOTE_DIR; chmod +x $REMOTE_DIR/app/dist/bunker9; chmod 775 $REMOTE_DIR/app/data"
 
 echo ""
 echo "· перезапуск"

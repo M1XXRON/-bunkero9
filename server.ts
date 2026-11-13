@@ -15,6 +15,21 @@ import {
   renderTitle,
 } from "./src/render.ts";
 
+import {
+  saveRoom,
+  saveRoomNow,
+  dropRoom,
+  loadRooms,
+  saveGame,
+  lastGames,
+  saveSession,
+  loadSessions,
+  dropSessionsOfRoom,
+  stats as dbStats,
+  flush,
+  dbPath,
+} from "./src/store.ts";
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const engine = require("./src/engine.js");
 
@@ -46,7 +61,16 @@ function sidOf(req: Request): string {
 
 // Брошенные комнаты: в прежнем сервере engine.cleanupRooms() крутился
 // по таймеру, при переносе на Bun вызов потеряли — комнаты копились в памяти.
-setInterval(() => engine.cleanupRooms(), 30_000);
+setInterval(() => {
+  engine.cleanupRooms();
+  // в базе не должно оставаться комнат, которых уже нет в памяти
+  for (const row of loadRooms()) {
+    if (!engine.rooms.has(row.code)) {
+      dropRoom(row.code);
+      dropSessionsOfRoom(row.code);
+    }
+  }
+}, 30_000);
 
 // Сессии без комнаты и закрытые потоки копятся — подчищаем раз в 10 минут.
 setInterval(
@@ -173,7 +197,15 @@ function broadcast(room: any, origin: string) {
   }
 }
 
-engine.setChangeHandler((room: any) => broadcast(room, currentOrigin));
+engine.setChangeHandler((room: any) => {
+  saveRoom(room);
+  // финал партии пишем в историю один раз
+  if (room.state === "end" && room.savedGameId !== room.gameId) {
+    room.savedGameId = room.gameId;
+    saveGame(room);
+  }
+  broadcast(room, currentOrigin);
+});
 
 let currentOrigin = "";
 
@@ -234,6 +266,7 @@ async function handleAction(
       session.player = result.player.id;
       session.phaseKey = "";
       session.lastPayload = "";
+      saveSession(sid, result.room.code, result.player.id, null);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
@@ -251,6 +284,7 @@ async function handleAction(
       session.player = result.player.id;
       session.phaseKey = "";
       session.lastPayload = "";
+      saveSession(sid, result.room.code, result.player.id, null);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
@@ -307,6 +341,7 @@ async function handleAction(
     }
     case "leave": {
       if (session.room && session.player) engine.leaveRoom(session.room, session.player);
+      saveSession(sid, null, null, null);
       session.room = null;
       session.player = null;
       return new Response(null, { status: 303, headers: { Location: "/" } });
@@ -383,6 +418,33 @@ document.addEventListener('click', (e) => {
 
 // ---------- сервер ----------
 
+// восстановление комнат из базы: партии переживают рестарт
+for (const saved of loadRooms()) {
+  const room = engine.resumeRoom(saved);
+  engine.rooms.set(room.code, room);
+  console.log(
+    `  ↑ восстановлена комната ${room.code} (${room.state}, день ${room.day}, игроков ${room.players.length})`,
+  );
+}
+
+for (const saved of loadSessions()) {
+  if (!saved.room || !engine.rooms.has(saved.room)) {
+    dropSessionsOfRoom(saved.room ?? "");
+    continue;
+  }
+  if (!sessions.has(saved.sid)) {
+    sessions.set(saved.sid, {
+      room: saved.room,
+      player: saved.player,
+      stream: null,
+      phaseKey: "",
+      lastPayload: "",
+    });
+  }
+  if (saved.tab) tabs.set(`${saved.room}:${saved.player}`, saved.tab);
+}
+console.log(`  ↑ сессий восстановлено: ${loadSessions().length}`);
+
 Bun.serve({
   port: PORT,
   idleTimeout: 255,
@@ -394,7 +456,16 @@ Bun.serve({
     currentOrigin = origin;
 
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, rooms: engine.rooms.size, sessions: sessions.size });
+      return Response.json({
+        ok: true,
+        rooms: engine.rooms.size,
+        sessions: sessions.size,
+        db: dbStats(),
+      });
+    }
+
+    if (url.pathname === "/api/games") {
+      return Response.json({ games: lastGames(10) });
     }
 
     if (url.pathname.startsWith("/act/")) {
@@ -473,4 +544,14 @@ Bun.serve({
   },
 });
 
-console.log(`БУНКЕР·9 · bun ${Bun.version} · порт ${PORT}`);
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    for (const room of engine.rooms.values()) saveRoomNow(room);
+    flush();
+    process.exit(0);
+  });
+}
+
+console.log(
+  `БУНКЕР·9 · bun ${Bun.version} · порт ${PORT} · база ${dbPath} (${dbStats().rooms} комнат, ${dbStats().games} партий)`,
+);
