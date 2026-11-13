@@ -322,6 +322,11 @@ async function handleAction(
       session.phaseKey = "";
       session.lastPayload = "";
       saveSession(sid, result.room.code, result.player.id, null);
+      // createRoom/joinRoom не зовут changed(), поэтому saveRoom сам по себе не
+      // случится: без этого лобби жило только в памяти и исчезало при
+      // рестарте (а cookie и сессия оставались — игрок получал тупик
+      // «Вы уже в бункере.»).
+      saveRoom(result.room);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
@@ -344,6 +349,7 @@ async function handleAction(
       session.phaseKey = "";
       session.lastPayload = "";
       saveSession(sid, result.room.code, result.player.id, null);
+      saveRoom(result.room);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }

@@ -46,6 +46,11 @@ await post(H, "create", { name: "Хост", avatar: "🦉" });
 const html = await page(H);
 const code = (html.match(/Код бункера <b>([A-Z0-9]{4})<\/b>/) || [])[1];
 ok(!!code, `комната создана (${code})`);
+// createRoom не зовёт changed(): без явного saveRoom лобби до старта партии
+// не попадало в базу и пропадало при рестарте, оставляя игрока с cookie без комнаты.
+await sleep(500);
+const dbAfterCreate = await health();
+ok(dbAfterCreate.db?.rooms >= 1, `лобби до старта уже в базе (rooms=${dbAfterCreate.db?.rooms})`);
 for (const [i, n] of ["Борис", "Вера", "Глеб", "Дина"].entries())
   await post(`sess-${i}`, "join", { code, name: n, avatar: "🦊" });
 await sleep(600);
