@@ -22,7 +22,8 @@ if [ "${SKIP_VERIFY:-0}" != "1" ]; then
 	echo "· проверки перед выкладкой (bun check + fmt + тесты)"
 	~/.bun/bin/bun check || { echo "  типы не прошли — деплой остановлен"; exit 1; }
 	~/.bun/bin/bun fmt --check || { echo "  формат не прошёл — деплой остановлен"; exit 1; }
-	bun test/sim-bun.mjs || { echo "  тесты не прошли — деплой остановлен"; exit 1; }
+	# тест сам поднимает сервер на свободном порту
+	"$HOME/.bun/bin/bun" test/sim-bun.mjs || { echo "  тесты не прошли — деплой остановлен"; exit 1; }
 fi
 
 echo ""
