@@ -72,6 +72,20 @@ try {
   const personas = (roster.match(/ИИ-профессия \d+/g) || []).length;
   note(personas >= 1, `персонажи пришли от модели (${personas} карт)`);
 
+  // обсуждение: подсказки должны прийти от модели (mock-маркер)
+  let aiHints = false;
+  for (let i = 0; i < 30; i += 1) {
+    await sleep(400);
+    const html = await page(H);
+    if (/ИИ-наводка/.test(html)) {
+      aiHints = true;
+      break;
+    }
+    if (/ОБСУЖДЕНИЕ/.test(html)) continue;
+    await act(H, "skip");
+  }
+  note(aiHints, "подсказки на обсуждении сгенерированы моделью");
+
   // ждём второй день: событие должно прийти от ИИ
   let aiEvent = false;
   for (let i = 0; i < 60; i++) {
@@ -114,6 +128,14 @@ try {
   note(Boolean(recap), `разбор партии отрисован («${recap}»)`);
   const verdict = (await page(H)).match(/recap-verdict">([^<]*)/);
   note(Boolean(verdict && verdict[1].length), "у разбора есть итоговая фраза");
+
+  // эпитафия: mock-модуль отдаёт строку, движок вставляет её вместо сухого текста
+  process.env.BUNKER_AI = "mock";
+  const ai = await import("../src/ai.ts");
+  const line = await ai.generateEpitaph("Тест (карты: здоровье: астма) — в бункере холод");
+  note(Boolean(line && line.length > 5), `причина ночной потери генерируется («${line}»)`);
+  const hintsFromAi = await ai.generateHints("день 2, живых 5");
+  note(Array.isArray(hintsFromAi) && hintsFromAi.length >= 2, "модель отдаёт 2–3 наводки");
 
   const voice = await fetch(`${SITE}/voice.js`);
   note(voice.status === 200, `голосовой скрипт отдаётся (${voice.status})`);

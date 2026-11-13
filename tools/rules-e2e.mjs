@@ -109,7 +109,30 @@ const hostIdOf = (room) => room.hostId;
   note(again.ok === true, "после паузы сообщение проходит");
 }
 
-// ---------- 5. боты после рестарта ----------
+// ---------- 5. причина ночной потери ----------
+{
+  const { room, host } = makeRoom(5);
+  engine.startGame(room, host.id);
+  engine.skipPhase(room.code, host.id); // интро -> раскрытие
+  engine.skipPhase(room.code, host.id); // раскрытие -> обсуждение
+  engine.skipPhase(room.code, host.id); // обсуждение -> голосование
+  room.resources.food = 0;
+  room.resources.meds = 0;
+  engine.skipPhase(room.code, host.id); // голосование -> ночь (жертва выбирается здесь)
+  const crisis = room.night?.crisis;
+  note(Boolean(crisis?.victimId), "жертва кризиса выбрана на входе в ночь");
+  const victimName = room.players.find((p) => p.id === crisis?.victimId)?.name;
+  crisis.epitaph = `Проверка: ${victimName} не пережил холод.`;
+  engine.skipPhase(room.code, host.id); // ночь -> день (смерть с нашей причиной)
+  const epitaphMsg = room.messages.find((m) => m.text.includes("Проверка"));
+  note(Boolean(epitaphMsg), `эпитафия попала в ленту («${epitaphMsg?.text || "нет"}»)`);
+  note(
+    !room.messages.some((m) => m.text.startsWith("Кризис:")),
+    "стандартная строка кризиса не дублируется",
+  );
+}
+
+// ---------- 6. боты после рестарта ----------
 {
   const { room, host } = makeRoom(2);
   const bot = engine.joinRoom({ code: room.code, name: "Механик", avatar: "🐙", socketId: "bot" });

@@ -369,7 +369,7 @@ function checkEnd(room) {
   return null;
 }
 
-function removePlayer(room, player, cause, note) {
+function removePlayer(room, player, cause, note, options = {}) {
   player.alive = false;
   player.death = { day: room.day, cause, note: note || null };
   // Мёртвый хост не должен распоряжаться темпом: передаём живому человеку,
@@ -379,6 +379,7 @@ function removePlayer(room, player, cause, note) {
     const next = alive.find((item) => !item.isBot) || alive[0] || null;
     room.hostId = next ? next.id : null;
   }
+  if (options.quiet) return;
   const prefix = cause === 'exile' ? 'Изгнание' : cause === 'night' ? 'Ночная потеря' : cause === 'left' ? 'Выход' : 'Кризис';
   const reason = cause === 'crisis' && note ? ` Причина — ${note}.` : '';
   system(room, `${prefix}: ${player.name}.${reason}`, 'bad');
@@ -653,7 +654,22 @@ function resolveVote(room) {
 function startNight(room) {
   if (room.state === 'end') return;
   room.votes = {};
-  room.night = { crisis: null };
+  const alive = alivePlayers(room);
+  const starving = room.resources.food <= 0;
+  const cold = room.resources.energy <= 0;
+  const fatal = (starving || cold) && room.resources.meds <= 0;
+  // Жертву кризиса выбираем на входе в ночь: за 25–40 секунд фазы сервер
+  // успевает попросить у модели причину, а исход уже предопределён.
+  const victim = fatal && alive.length ? pick(alive) : null;
+  room.night = {
+    crisis: victim
+      ? {
+          victimId: victim.id,
+          reason: starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод',
+          epitaph: null,
+        }
+      : null,
+  };
   startPhase(room, 'night', phaseMs(room, 'night'), () => resolveNight(room));
   system(room, `НОЧЬ ${room.day} · Свет гаснет.`, 'phase');
   changed(room);
@@ -676,9 +692,15 @@ function resolveNight(room) {
         'warn',
       );
     } else if (alive.length) {
-      const victim = alive[Math.floor(Math.random() * alive.length)];
-      system(room, `Ночь на пределе — ${reason}.`, 'bad');
-      removePlayer(room, victim, 'crisis', reason);
+      const planned = room.night?.crisis?.victimId
+        ? playerById(room, room.night.crisis.victimId)
+        : null;
+      const victim = planned && planned.alive ? planned : alive[Math.floor(Math.random() * alive.length)];
+      const epitaph = room.night?.crisis?.epitaph;
+      if (epitaph) system(room, epitaph, 'bad');
+      else system(room, `Ночь на пределе — ${reason}.`, 'bad');
+      // если причина написана отдельной строкой, стандартную не дублируем
+      removePlayer(room, victim, 'crisis', reason, { quiet: Boolean(epitaph) });
     }
   } else {
     system(room, 'Ночь прошла спокойно. Системы держат.', 'good');
@@ -1140,6 +1162,10 @@ function messagesFor(room, viewer) {
 // закрыто больше всех, кто уже выложил слишком много карт.
 function discussionHints(room, spokenToday) {
   if (room.state !== 'discussion') return [];
+  // Готовые подсказки от модели (сервер кладёт их на входе в обсуждение).
+  if (room.aiHints && room.aiHints.day === room.day && room.aiHints.list?.length) {
+    return room.aiHints.list.slice(0, 3);
+  }
   const alive = alivePlayers(room);
   if (!alive.length) return [];
   const hints = [];

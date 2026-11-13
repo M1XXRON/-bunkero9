@@ -156,6 +156,41 @@ export async function generateRecap(log: string): Promise<Recap | null> {
   return { title, paragraphs, verdict };
 }
 
+// ---------- 4. Подсказки на обсуждении ----------
+
+const HINTS_SYSTEM = `Ты — ведущий игры «Бункер». По публичной картине дня придумай 2–3 наводки
+для обсуждения: конкретные вопросы к конкретным игрокам.
+Верни строго JSON: {"hints":["...","..."]}
+Правила: каждая наводка — одно предложение до 120 знаков, обращение по имени,
+опирается только на раскрытые карты, молчание и запасы. Не выдумывай факты,
+не упоминай скрытые значения карт. Язык — русский.`;
+
+export async function generateHints(context: string): Promise<string[] | null> {
+  const data = await chatJson(HINTS_SYSTEM, `Публичная картина дня: ${context}`, 400);
+  const list = Array.isArray(data?.hints) ? (data.hints as unknown[]) : null;
+  if (!list) return null;
+  const hints = list
+    .map((h) => clean(h, 160))
+    .filter(Boolean)
+    .slice(0, 3);
+  return hints.length ? hints : null;
+}
+
+// ---------- 5. Причина ночной потери ----------
+
+const EPITAPH_SYSTEM = `Ты — ведущий игры «Бункер». Один выживший не пережил ночь из-за нехватки
+ресурсов. Напиши одну фразу-объяснение, привязанную к его картам.
+Верни строго JSON: {"line":"..."}
+Правила: одно предложение до 140 знаков, без имени в начале — начни с причины
+(«Астма не выдержала холода…», «Язва открылась на голоде…»). Используй только
+его здоровье, профессию, багаж или привычку. Язык — русский.`;
+
+export async function generateEpitaph(context: string): Promise<string | null> {
+  const data = await chatJson(EPITAPH_SYSTEM, `Погибает: ${context}`, 200);
+  const line = clean(data?.line, 160);
+  return line || null;
+}
+
 // ---------- mock ----------
 
 let mockSeq = 0;
@@ -179,6 +214,17 @@ function mockAnswer(system: string, user: string): Json {
         ],
       })),
     };
+  }
+  if (system.includes("наводки")) {
+    return {
+      hints: [
+        `ИИ-наводка ${mockSeq}: спросите про закрытую профессию`,
+        `ИИ-наводка ${mockSeq}: кто молчит после изгнания?`,
+      ],
+    };
+  }
+  if (system.includes("не пережил ночь")) {
+    return { line: `ИИ-причина ${mockSeq}: смена не дотянула до утра.` };
   }
   if (system.includes("событие")) {
     return {

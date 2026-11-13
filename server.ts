@@ -32,7 +32,14 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const engine = require("./src/engine.js");
 
-import { aiEnabled, generateEvent, generatePersonas, generateRecap } from "./src/ai.ts";
+import {
+  aiEnabled,
+  generateEpitaph,
+  generateEvent,
+  generateHints,
+  generatePersonas,
+  generateRecap,
+} from "./src/ai.ts";
 
 const PORT = Number(process.env.PORT || 3100);
 // Путь к статике: в компилированном бинарнике import.meta.url указывает внутрь
@@ -506,6 +513,74 @@ function aiPersonas(room: any): Promise<void> {
   return job;
 }
 
+function aliveOf(room: any) {
+  return room.players.filter((player: any) => player.alive);
+}
+
+function publicBoard(room: any): string {
+  const alive = aliveOf(room);
+  const lines = alive.map((player: any) => {
+    const revealed = player.traits
+      .filter((trait: any) => trait.revealed)
+      .map((trait: any) => `${trait.label}: ${trait.value}`);
+    const closed = player.traits
+      .filter((trait: any) => !trait.revealed)
+      .map((trait: any) => trait.label);
+    const spoke = room.messages.some(
+      (message: any) =>
+        message.kind === "chat" && message.day === room.day && message.authorId === player.id,
+    );
+    return `${player.name}${spoke ? "" : " (молчит)"}: раскрыто [${
+      revealed.join("; ") || "ничего"
+    }], закрыто [${closed.join(", ") || "—"}]`;
+  });
+  return [
+    `день ${room.day}, до спасения ${Math.max(0, (room.rescueDay || 0) - room.day)} дн.`,
+    `живых ${alive.length} при минимуме ${room.crewMin}`,
+    `еда ${room.resources.food}, энергия ${room.resources.energy}, медикаменты ${room.resources.meds}`,
+    ...lines,
+  ].join("\n");
+}
+
+async function aiHints(room: any): Promise<void> {
+  const key = `${room.code}:hints`;
+  if (aiBusy.has(key)) return;
+  const day = room.day;
+  aiBusy.add(key);
+  try {
+    const list = await generateHints(publicBoard(room));
+    if (engine.rooms.get(room.code) !== room) return;
+    if (room.state !== "discussion" || room.day !== day) return;
+    room.aiHints = { day, list };
+    saveRoom(room);
+    broadcast(room, currentOrigin);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
+async function aiEpitaph(room: any): Promise<void> {
+  const crisis = room.night?.crisis;
+  if (!crisis?.victimId) return;
+  const key = `${room.code}:epitaph`;
+  if (aiBusy.has(key)) return;
+  aiBusy.add(key);
+  const victim = room.players.find((player: any) => player.id === crisis.victimId);
+  try {
+    if (!victim) return;
+    const cards = victim.traits.map((trait: any) => `${trait.label}: ${trait.value}`).join("; ");
+    const line = await generateEpitaph(
+      `${victim.name} (карты: ${cards}) — в бункере ${crisis.reason}, медикаментов не осталось`,
+    );
+    if (engine.rooms.get(room.code) !== room) return;
+    if (room.state !== "night" || room.night?.crisis?.victimId !== crisis.victimId) return;
+    room.night.crisis.epitaph = line;
+    saveRoom(room);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
 async function aiNextEvent(room: any): Promise<void> {
   const key = `${room.code}:event`;
   if (aiBusy.has(key)) return;
@@ -546,6 +621,12 @@ function scheduleAi(room: any): void {
   }
   if (!aiEnabled()) return;
   if (room.state === "night" && !room.nextEvent) void aiNextEvent(room);
+  // причина ночной потери — пока идёт ночь, жертва уже выбрана движком
+  if (room.state === "night" && room.night?.crisis?.victimId && !room.night.crisis.epitaph)
+    void aiEpitaph(room);
+  // подсказки на обсуждении — один вызов на день
+  if (room.state === "discussion" && (!room.aiHints || room.aiHints.day !== room.day))
+    void aiHints(room);
   // Пока хост собирает состав — готовим персонажей, чтобы старт не ждал модель.
   if (room.state === "lobby" && room.players.length >= engine.MIN_PLAYERS) {
     const ready = room.personas && room.personas.forCount === room.players.length;
