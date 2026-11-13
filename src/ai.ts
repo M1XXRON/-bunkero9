@@ -92,7 +92,7 @@ export async function generatePersonas(
   const data = await chatJson(
     PERSONA_SYSTEM,
     `Игроков: ${names.length}. Контекст катастрофы: ${catastrophe}. Позывные: ${names.join(", ")}.`,
-    900,
+    600,
   );
   const list = Array.isArray(data?.players) ? (data.players as any[]) : null;
   if (!list || list.length < names.length) return null;

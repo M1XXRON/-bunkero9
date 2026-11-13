@@ -705,7 +705,7 @@ async function handleAction(
       let personas: any[] | null = null;
       if (aiEnabled() && room.state === "lobby" && room.hostId === playerId) {
         // Обычно персонажи готовы заранее. Если генерация ещё идёт — ждём её
-        // не дольше 3 с и стартуем: лучше карты из пула, чем зависшая кнопка.
+        // не дольше 5 с и стартуем: лучше карты из пула, чем зависшая кнопка.
         const ready = () =>
           room.personas && room.personas.forCount === room.players.length
             ? room.personas.list
@@ -713,7 +713,7 @@ async function handleAction(
         personas = ready();
         if (!personas) {
           const job = aiPending.get(`${room.code}:personas`);
-          if (job) await Promise.race([job, sleep(3000)]);
+          if (job) await Promise.race([job, sleep(5000)]);
           personas = ready();
         }
       }
