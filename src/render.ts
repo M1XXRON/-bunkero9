@@ -20,6 +20,7 @@ export type Player = {
   roleLabel: string | null;
   death: { day: number; cause: string; note?: string } | null;
   traits: { cat: string; label: string; value: string }[];
+  traitSlots: { cat: string; label: string; revealed: boolean; value: string | null }[];
   traitsRevealed: number;
   totalTraits: number;
   isBot?: boolean;
@@ -299,6 +300,42 @@ function botControls(snap: Snapshot): string {
 
 // ---------- игровой экран ----------
 
+// Подсказка при наведении: все пять категорий, раскрытые — со значением,
+// скрытые — запечатаны. Значения скрытых карт на клиент не уходят вообще.
+function peekCard(p: Player): string {
+  const slots = (p.traitSlots || [])
+    .map(
+      (slot) => `<div class="peek-row ${slot.revealed ? "on" : "off"}">
+        <span class="peek-cat">${esc(slot.label)}</span>
+        <span class="peek-val">${slot.revealed ? esc(slot.value || "—") : "скрыта"}</span>
+        <span class="peek-mark">${slot.revealed ? "на столе" : "?"}</span>
+      </div>`,
+    )
+    .join("");
+  const state = !p.alive
+    ? p.left
+      ? "вышел из бункера"
+      : p.death?.cause === "exile"
+        ? "изгнан"
+        : "погиб"
+    : p.isBot
+      ? "бот"
+      : p.connected
+        ? "в бункере"
+        : "нет связи";
+  const role = p.role
+    ? `<span class="peek-role tone-${p.role}">${esc(p.roleLabel || ROLE_NAME[p.role] || "")}</span>`
+    : "";
+  return `<div class="peek-head">
+      ${avatar(p, "sm")}
+      <div>
+        <div class="peek-name">${esc(p.name)}</div>
+        <div class="peek-meta">${esc(state)} · карт раскрыто ${p.traitsRevealed} / ${p.totalTraits} ${role}</div>
+      </div>
+    </div>
+    <div class="peek-list">${slots}</div>`;
+}
+
 function playersPanel(snap: Snapshot): string {
   const rows = snap.players
     .map((p) => {
@@ -312,7 +349,8 @@ function playersPanel(snap: Snapshot): string {
       return `
         <div class="players-row ${p.alive ? "" : "dead"} ${p.id === snap.me.id ? "is-me" : ""} ${
           snap.turn?.playerId === p.id ? "current-turn" : ""
-        }">
+        }" data-peek>
+          <div class="peek-source" aria-hidden="true">${peekCard(p)}</div>
           ${avatar(p, "xs")}
           <span class="pname">${esc(p.name)}</span>
           ${p.teammate ? '<span class="mini-badge mafia">свой</span>' : ""}
@@ -761,6 +799,7 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
       </dialog>
       <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules()}</dialog>
       <div id="error"></div>
+      <div id="peek" class="peek" hidden></div>
     </section>
   </div>`;
 }

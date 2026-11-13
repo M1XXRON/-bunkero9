@@ -1212,6 +1212,18 @@ function serializeFor(room, viewer) {
         label: trait.label,
         value: trait.value,
       })),
+      // Слоты по категориям для карточки-подсказки: раскрытые — со значением,
+      // скрытые — только категория («скрыта»). Ценность скрытых карт не утекает.
+      traitSlots: TRAITS.map((category) => {
+        const trait = player.traits.find((item) => item.cat === category.key);
+        const isRevealed = Boolean(trait && trait.revealed) || isEnd;
+        return {
+          cat: category.key,
+          label: category.label,
+          revealed: isRevealed,
+          value: isRevealed && trait ? trait.value : null,
+        };
+      }),
       traitsRevealed: revealedTraits.length,
       totalTraits: player.traits.length,
       revealedThisRound: Boolean(player.revealedThisRound),

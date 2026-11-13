@@ -2204,3 +2204,105 @@ body.landing {
     order: 4;
   }
 }
+
+/* ---------- подсказка «кто что раскрыл» ---------- */
+
+.peek-source {
+  display: none;
+}
+
+.peek {
+  position: fixed;
+  z-index: 40;
+  width: 300px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(20, 20, 20, 0.98);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.peek-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.peek-name {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.peek-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.peek-role {
+  margin-left: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.peek-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 8px;
+}
+
+.peek-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.peek-cat {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.peek-val {
+  font-size: 12.5px;
+  color: #fff;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.peek-row.off .peek-val {
+  color: #4a4a4a;
+  letter-spacing: 0.08em;
+}
+
+.peek-mark {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #3a3a3a;
+  white-space: nowrap;
+}
+
+.peek-row.on .peek-mark {
+  color: var(--accent);
+}
+
+@media (max-width: 1040px) {
+  .peek {
+    width: min(300px, calc(100vw - 24px));
+  }
+}

@@ -733,6 +733,69 @@ document.addEventListener('click', (e) => {
     t.style.display = 'none';
   }
 });
+
+// Подсказка «кто что раскрыл» при наведении на выжившего. Содержимое строки
+// живёт в .peek-source (его присылает сервер, скрытые карты — без значений),
+// а плавающая карточка стоит в оболочке и патчами не затирается.
+(function () {
+  const peek = document.getElementById('peek');
+  if (!peek) return;
+  let hideTimer = 0;
+  let openRow = null;
+
+  const show = (row) => {
+    const src = row.querySelector('.peek-source');
+    if (!src) return;
+    clearTimeout(hideTimer);
+    peek.innerHTML = src.innerHTML;
+    peek.hidden = false;
+    const r = row.getBoundingClientRect();
+    const w = peek.offsetWidth;
+    const h = peek.offsetHeight;
+    const gap = 12;
+    let left = r.right + gap;
+    if (left + w > window.innerWidth - 8) left = r.left - w - gap;
+    if (left < 8) left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left));
+    let top = r.top - 10;
+    if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+    peek.style.left = Math.max(8, Math.round(left)) + 'px';
+    peek.style.top = Math.max(8, Math.round(top)) + 'px';
+    openRow = row;
+  };
+
+  const hide = (delay = 100) => {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      peek.hidden = true;
+      openRow = null;
+    }, delay);
+  };
+
+  document.addEventListener('pointerover', (e) => {
+    const row = e.target.closest && e.target.closest('[data-peek]');
+    if (!row) return;
+    show(row);
+  });
+
+  document.addEventListener('pointerout', (e) => {
+    const row = e.target.closest && e.target.closest('[data-peek]');
+    if (!row || row !== openRow) return;
+    if (row.contains(e.relatedTarget)) return;
+    hide();
+  });
+
+  // тап на телефоне: открыть и закрыть повторным тапом
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest && e.target.closest('[data-peek]');
+    if (!row || (e.target.closest && e.target.closest('.row-action'))) return;
+    if (openRow === row && !peek.hidden) hide(0);
+    else show(row);
+  });
+
+  window.addEventListener('scroll', () => hide(0), true);
+  window.addEventListener('resize', () => hide(0));
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && hide(0));
+})();
 </script>
 </body></html>`;
 }

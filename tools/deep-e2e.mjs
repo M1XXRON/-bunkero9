@@ -155,6 +155,27 @@ async function main() {
     "игра: без горизонтального скролла",
   );
 
+  // подсказка «кто что раскрыл»: наводим на строку второго игрока
+  const hover = await evaluate(
+    '(() => { const r = document.querySelectorAll(".players-row")[1]; if (!r) return null; const b = r.getBoundingClientRect(); return { x: Math.round(b.left + 60), y: Math.round(b.top + 12) }; })()',
+  );
+  if (hover) {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: hover.x, y: hover.y });
+    await sleep(600);
+    const peekOpen = await evaluate("!document.getElementById('peek').hidden");
+    note(peekOpen, "подсказка при наведении открывается");
+    if (peekOpen) {
+      const rows = await evaluate("document.querySelectorAll('#peek .peek-row').length");
+      note(rows === 5, `в подсказке все пять категорий (${rows})`);
+      const open = await evaluate("document.querySelectorAll('#peek .peek-row.on').length");
+      note(open === 0, `скрытые карты не раскрываются (открыто ${open})`);
+      const leaked = await evaluate(
+        '[...document.querySelectorAll("#peek .peek-row.off .peek-val")].some((e) => e.textContent.trim() !== "скрыта")',
+      );
+      note(!leaked, "значения скрытых карт не утекают в разметку");
+    }
+  }
+
   const timer1 = (await text('(document.querySelector(".phase-timer")||{}).textContent')).trim();
   await sleep(300);
   const timer2 = (await text('(document.querySelector(".phase-timer")||{}).textContent')).trim();
@@ -217,6 +238,15 @@ async function main() {
       await sleep(1200);
       const body = await text("document.body.innerText");
       note(/Карта на столе|на столе/i.test(body), "раскрытие: карта ушла на стол");
+      const ownHover = await evaluate(
+        '(() => { const r = document.querySelectorAll(".players-row")[0]; const b = r.getBoundingClientRect(); return { x: Math.round(b.left + 60), y: Math.round(b.top + 12) }; })()',
+      );
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: ownHover.x, y: ownHover.y });
+      await sleep(600);
+      const revealedInPeek = await evaluate(
+        "document.querySelectorAll('#peek .peek-row.on').length",
+      );
+      note(revealedInPeek === 1, `в подсказке видно раскрытую карту (${revealedInPeek})`);
       const endTurn = await evaluate("!!document.querySelector('.end-turn-btn')");
       note(endTurn, "раскрытие: есть кнопка «Завершить ход»");
       if (endTurn) {
