@@ -133,7 +133,7 @@ function avatar(
 function leaveButton(snap: Snapshot): string {
   if (snap.state === "lobby")
     return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="@post('/act/leave', {retry: 'never'})">×</button>`;
-  return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="confirm('Выйти из бункера? Персонаж погибнет, роль раскроется.') && @post('/act/leave', {retry: 'never'})">×</button>`;
+  return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="confirm('Выйти из бункера? Персонаж погибнет, его карты откроются.') && @post('/act/leave', {retry: 'never'})">×</button>`;
 }
 
 function topbar(snap: Snapshot): string {
@@ -177,7 +177,6 @@ function topbar(snap: Snapshot): string {
         <span class="res${low(res.meds, 0)}"><i>меды</i><b>${res.meds}</b></span>
       </div>
       <div class="top-actions">
-        <button class="pill" data-on:click="document.getElementById('dossier').showModal()">Досье</button>
         <button class="pill pill-ghost" data-on:click="document.getElementById('rules').showModal()">Правила</button>
         ${leaveButton(snap)}
       </div>
@@ -372,8 +371,8 @@ function playersPanel(snap: Snapshot): string {
     </section>`;
 }
 
-// «Ваши карты» — всегда на экране, не только в досье: игрок в любой момент
-// видит свои характеристики и что из них уже на столе.
+// «Ваши карты» — всегда на экране: игрок в любой момент видит свои
+// характеристики и что из них уже на столе.
 function ownCards(snap: Snapshot): string {
   if (snap.state === "lobby") return "";
   const rows = snap.me.traits
@@ -526,7 +525,7 @@ function voteScene(snap: Snapshot): string {
     .join("");
   return `<div class="action-block">
       <h3>Кого изгнать?</h3>
-      <p>Изгнанный покидает бункер навсегда, и его роль становится известна. При равенстве голосов не уходит никто.</p>
+      <p>Изгнанный покидает бункер навсегда, и все его карты становятся видны. При равенстве голосов не уходит никто.</p>
       <div class="target-grid">${cards}</div>
       <div class="vote-tools">
         <button class="chip skip-vote ${me.votedFor === "skip" ? "selected" : ""}"
@@ -663,7 +662,6 @@ function scene(snap: Snapshot): string {
         <h3>Добро пожаловать в «Кольцо-9»</h3>
         <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и слишком много людей на слишком мало мест.</p>
         <p class="note">Смена собрана. Спасение через ${snap.rescueDay ?? "?"} дней — до тех пор нужно держать ресурсы и людей.</p>
-        <button class="btn btn-secondary" data-on:click="document.getElementById('dossier').showModal()">Открыть досье</button>
       </div>`,
     reveal: () => revealScene(snap),
     discussion: () => discussionScene(snap),
@@ -826,32 +824,6 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
 
 // ---------- модалки ----------
 
-function dossierBody(snap: Snapshot): string {
-  const me = snap.me;
-  const traits = me.traits
-    .map(
-      (t) => `<div class="trait-row ${t.revealed ? "revealed" : ""}">
-        <span class="trait-label">${esc(t.label)}</span>
-        <span class="trait-value">${esc(t.value)}</span>
-        <span class="trait-mark">${t.revealed ? "на столе" : "скрыта"}</span>
-      </div>`,
-    )
-    .join("");
-  return `
-        <button class="modal-close" data-on:click="document.getElementById('dossier').close()" aria-label="Закрыть досье">×</button>
-        <div class="modal-head">
-          <span class="eyebrow">ЛИЧНОЕ ДЕЛО</span>
-          <h2 id="dossierTitle">${esc(me.name)}</h2>
-        </div>
-        <div class="modal-section">
-          <p class="note">Пять карт — всё, что о вас знают остальные. Одну можно показать в свой ход, остальные останутся за дверью.</p>
-        </div>
-        <div class="modal-section">
-          <span class="eyebrow">КАРТЫ ПЕРСОНАЖА</span>
-          ${traits}
-        </div>`;
-}
-
 function rules(snap: Snapshot): string {
   return `
         <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
@@ -860,7 +832,7 @@ function rules(snap: Snapshot): string {
           <p><b>Цель.</b> Дожить до спасения. Оно приходит после ночи последнего дня — спасаются все, кто к тому моменту жив.</p>
           <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
-          <p><b>Ночь.</b> Если к утру еда или энергия на нуле, бункер теряет одного. Медикаменты могут прикрыть одну такую ночь — их тратит смена, а не роль.</p>
+          <p><b>Ночь.</b> Если к утру еда или энергия на нуле, бункер теряет одного. Медикаменты могут прикрыть одну такую ночь.</p>
           <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>
         </div>`;
 }
@@ -879,9 +851,6 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
       ${topbar(snap)}
       <div id="banner" class="phase-banner"></div>
       ${renderBoard(snap, origin, tab)}
-      <dialog id="dossier" class="sheet" aria-labelledby="dossierTitle">
-        <div id="dossierBody">${dossierBody(snap)}</div>
-      </dialog>
       <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules(snap)}</dialog>
       <div id="error"></div>
       <div id="peek" class="peek" hidden></div>
@@ -901,12 +870,6 @@ export function renderBoard(snap: Snapshot, origin: string, tab = "day"): string
     ${scene(snap)}
     ${chatPanel(snap, tab)}
   </main>`;
-}
-
-// Содержимое досье патчится отдельно: диалог живёт в оболочке, поэтому морфинг
-// внутренностей не закрывает открытое окно.
-export function renderDossierBody(snap: Snapshot): string {
-  return `<div id="dossierBody">${dossierBody(snap)}</div>`;
 }
 
 export function renderTopbar(snap: Snapshot): string {
@@ -944,7 +907,7 @@ export function renderTitle(snap: Snapshot): string {
   else {
     if (snap.day) parts.push(`день ${snap.day}`);
     const label: Record<string, string> = {
-      intro: "роли розданы",
+      intro: "смена собрана",
       reveal: "раскрытие карт",
       discussion: "обсуждение",
       vote: "голосование",

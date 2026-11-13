@@ -204,33 +204,27 @@ async function main() {
     "чат: поле очистилось",
   );
 
-  await evaluate(
-    '[...document.querySelectorAll("button")].find((b) => /Досье/.test(b.textContent))?.click()',
+  // модалки: остались только правила (досье убрано вместе с ролями)
+  const rulesBtn = await evaluate(
+    '[...document.querySelectorAll("button")].find((b) => /Правила/.test(b.textContent))?.getAttribute("data-on:click") || ""',
   );
-  await sleep(600);
-  // нативный <dialog>: кнопка зовёт showModal, содержимое доступно по aria
-  const dossierAttr = await evaluate(
-    '[...document.querySelectorAll("button")].find((b) => /Досье/.test(b.textContent))?.getAttribute("data-on:click") || ""',
-  );
-  note(
-    String(dossierAttr).includes("showModal"),
-    `кнопка досье вызывает showModal (${dossierAttr})`,
-  );
-  await evaluate('document.getElementById("dossier")?.showModal()');
+  note(String(rulesBtn).includes("showModal"), `кнопка «Правила» открывает диалог (${rulesBtn})`);
+  note(await evaluate('!document.getElementById("dossier")'), "досье из интерфейса убрано");
+  await evaluate('document.getElementById("rules")?.showModal()');
   await sleep(300);
   note(
-    await evaluate('document.getElementById("dossier")?.open === true'),
-    "досье: открывается как <dialog>",
+    await evaluate('document.getElementById("rules")?.open === true'),
+    "правила открываются как <dialog>",
   );
   note(
     String(
-      await evaluate('document.getElementById("dossier")?.getAttribute("aria-labelledby") || ""'),
+      await evaluate('document.getElementById("rules")?.getAttribute("aria-labelledby") || ""'),
     ).length > 0,
-    "досье: есть aria-labelledby",
+    "правила: есть aria-labelledby",
   );
-  await evaluate('document.getElementById("dossier")?.close()');
+  await evaluate('document.getElementById("rules")?.close()');
   await sleep(200);
-  note(await evaluate('document.getElementById("dossier")?.open !== true'), "досье: закрывается");
+  note(await evaluate('document.getElementById("rules")?.open !== true'), "правила закрываются");
 
   // доходим до раскрытия карт и кликаем карту
   let sawReveal = false;

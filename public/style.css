@@ -422,14 +422,15 @@ button {
   position: fixed;
   left: 0;
   right: 0;
-  top: 0;
+  top: 63px;
   z-index: 30;
-  padding: 12px 16px;
+  padding: 7px 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   border-bottom: 1px solid var(--accent);
   background: rgba(20, 12, 10, 0.96);
   backdrop-filter: blur(10px);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   text-align: center;
@@ -1508,33 +1509,6 @@ button {
   line-height: 1.55;
 }
 
-.trait-row {
-  display: grid;
-  grid-template-columns: 110px 1fr auto;
-  align-items: baseline;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.trait-row .trait-label {
-  font-size: 9.5px;
-}
-
-.trait-row .trait-value {
-  font-size: 14px;
-  font-family: var(--body);
-  font-weight: 500;
-}
-
-.trait-row .trait-mark {
-  color: var(--faint);
-}
-
-.trait-row.revealed .trait-mark {
-  color: var(--ok);
-}
-
 /* ---------- ошибка ---------- */
 
 #error {
@@ -1700,9 +1674,6 @@ button {
   .trait-grid,
   .target-grid {
     grid-template-columns: 1fr;
-  }
-  .trait-row {
-    grid-template-columns: 96px 1fr auto;
   }
   .row-action {
     opacity: 1;

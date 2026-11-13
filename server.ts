@@ -7,7 +7,6 @@
 import {
   renderApp,
   renderBoard,
-  renderDossierBody,
   renderTopbar,
   renderTabs,
   renderFeed,
@@ -173,7 +172,7 @@ function phaseLabel(snapshot: any): string {
   const day = snapshot.day;
   switch (snapshot.state) {
     case "intro":
-      return "РОЛИ РОЗДАНЫ";
+      return "СМЕНА СОБРАНА";
     case "reveal":
       return `ДЕНЬ ${day} · РАСКРЫТИЕ КАРТ`;
     case "discussion":
@@ -402,7 +401,6 @@ function broadcast(room: any, origin: string) {
     let payload = "";
     payload += patchElement(renderTopbar(snapshot));
     payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
-    payload += patchElement(renderDossierBody(snapshot));
     payload += patchSelector("title", renderTitle(snapshot));
     if (banner)
       payload += patchElement(
@@ -912,7 +910,6 @@ Bun.serve({
           let payload = "";
           payload += patchElement(renderTopbar(snapshot));
           payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
-          payload += patchElement(renderDossierBody(snapshot));
           controller.enqueue(enc.encode(payload));
         },
         cancel() {
