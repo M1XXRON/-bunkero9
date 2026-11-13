@@ -115,13 +115,6 @@ function avatar(
 
 // ---------- верхняя панель ----------
 
-const iconFood = () =>
-  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 2 2v8h2v-8a2 2 0 0 0 2-2V3h-2v6h-1V3h-2v6H7V3zM17 3c-1.5 1-2.5 3-2.5 5.5S15.5 12 17 12v9h2V3z"/></svg>`;
-const iconBolt = () =>
-  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
-const iconCross = () =>
-  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.4" fill="none"/></svg>`;
-
 function topbar(snap: Snapshot): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
@@ -149,20 +142,14 @@ function topbar(snap: Snapshot): string {
       ${timer}
     </div>
     <div class="resources">
-      <span class="resource${low(res.food, snap.aliveCount)}">${iconFood()} <b>${res.food}</b></span>
-      <span class="resource${low(res.energy, 2)}">${iconBolt()} <b>${res.energy}</b></span>
-      <span class="resource${low(res.meds, 0)}">${iconCross()} <b>${res.meds}</b></span>
+      <span class="resource${low(res.food, snap.aliveCount)}">ЕДА <b>${res.food}</b></span>
+      <span class="resource${low(res.energy, 2)}">ЭНЕРГИЯ <b>${res.energy}</b></span>
+      <span class="resource${low(res.meds, 0)}">МЕДЫ <b>${res.meds}</b></span>
     </div>
     <div class="top-actions">
-      <button class="btn btn-secondary btn-small" data-on:click="$dossier = true" title="Роль и карты">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M9 12h7M9 16h5M9 8h7"/></svg><span>Досье</span>
-      </button>
-      <button class="btn btn-ghost btn-small" data-on:click="$rules = true" title="Как играть">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg><span>Правила</span>
-      </button>
-      <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Покинуть бункер">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M14 5h-8v14h8"/><path d="M11 12h9M16 8l4 4-4 4"/></svg>
-      </button>
+      <button class="btn btn-secondary btn-small" data-on:click="$dossier = true">Досье</button>
+      <button class="btn btn-ghost btn-small" data-on:click="$rules = true">Правила</button>
+      <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Выйти">×</button>
     </div>
   </header>`;
 }
@@ -271,13 +258,13 @@ function eventCard(snap: Snapshot): string {
   if (!snap.event) return "";
   const parts = [
     snap.event.food
-      ? `<span class="${snap.event.food > 0 ? "up" : "down"}">${iconFood()} ${snap.event.food > 0 ? "+" : ""}${snap.event.food}</span>`
+      ? `<span class="${snap.event.food > 0 ? "up" : "down"}">ЕДА ${snap.event.food > 0 ? "+" : ""}${snap.event.food}</span>`
       : "",
     snap.event.energy
-      ? `<span class="${snap.event.energy > 0 ? "up" : "down"}">${iconBolt()} ${snap.event.energy > 0 ? "+" : ""}${snap.event.energy}</span>`
+      ? `<span class="${snap.event.energy > 0 ? "up" : "down"}">ЭНЕРГИЯ ${snap.event.energy > 0 ? "+" : ""}${snap.event.energy}</span>`
       : "",
     snap.event.meds
-      ? `<span class="${snap.event.meds > 0 ? "up" : "down"}">${iconCross()} ${snap.event.meds > 0 ? "+" : ""}${snap.event.meds}</span>`
+      ? `<span class="${snap.event.meds > 0 ? "up" : "down"}">МЕДЫ ${snap.event.meds > 0 ? "+" : ""}${snap.event.meds}</span>`
       : "",
   ]
     .filter(Boolean)
@@ -450,48 +437,18 @@ function endScene(snap: Snapshot): string {
 
 function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
-    intro: () => {
-      const me = snap.me;
-      const role = ROLE_NAME[me.role || ""] || "—";
-      const roleTone = me.role || "human";
-      return `<div class="action-block intro-hero">
-        <span class="eyebrow">ПРОБУЖДЕНИЕ · КОЛЬЦО-9</span>
-        <h3>Добро пожаловать в бункер</h3>
-        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор
-        и чужие голоса за стеной. Роли уже розданы.</p>
-        <div class="intro-role tone-bg-${roleTone}">
-          <span class="intro-role-label">ВАША РОЛЬ</span>
-          <b class="tone-${roleTone}">${esc(role)}</b>
-          <span class="intro-role-hint">Подробности и личные карты — в досье</span>
-        </div>
-        <div class="intro-steps">
-          <div class="step"><b>1</b><span>Каждый день вы раскрываете <em>одну карту</em> — её увидят все</span></div>
-          <div class="step"><b>2</b><span>Обсуждение и голосование: изгнанный покидает бункер</span></div>
-          <div class="step"><b>3</b><span>Ночью заражённые выбирают жертву — врач может спасти</span></div>
-        </div>
-        <button class="btn btn-primary" data-on:click="$dossier = true">Открыть досье</button>
-      </div>`;
-    },
+    intro: () => `<div class="action-block">
+        <h3>Добро пожаловать в «Кольцо-9»</h3>
+        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и чужие голоса за стеной.</p>
+        <p class="note">Роли уже розданы. Первый день начнётся автоматически.</p>
+        <button class="btn btn-secondary" data-on:click="$dossier = true">Открыть досье</button>
+      </div>`,
     reveal: () => revealScene(snap),
-    discussion: () => {
-      const opened = snap.players
-        .flatMap((p) => p.traits.map((t) => ({ who: p.name, cat: t.label, val: t.value })))
-        .slice(-4);
-      const openedHtml = opened.length
-        ? `<div class="opened-cards">${opened
-            .map(
-              (t) =>
-                `<div class="opened-card"><span class="oc-who">${esc(t.who)}</span><span class="oc-cat">${esc(t.cat)}</span><span class="oc-val">${esc(t.val)}</span></div>`,
-            )
-            .join("")}</div>`
-        : "";
-      return `<div class="action-block">
+    discussion: () => `<div class="action-block">
         <h3>Кому вы верите?</h3>
         <p>Сопоставляйте карты, голоса и ночные потери. Голосование начнётся автоматически.</p>
-        ${openedHtml}
         <p class="note">Доверие — ресурс. Здесь его расходуют быстрее еды.</p>
-      </div>`;
-    },
+      </div>`,
     vote: () => voteScene(snap),
     night: () => nightScene(snap),
     end: () => endScene(snap),
@@ -581,21 +538,15 @@ function dossier(snap: Snapshot): string {
           ${
             roleHidden && me.alive
               ? `<p class="note">За этой дверью — роль и пять личных карт.</p>
-               <div class="role-card role-locked">
-                 <span class="role-sigil">?</span>
-                 <b>РОЛЬ СКРЫТА</b>
-                 <span class="role-tap">Нажми «Показать роль» — при соседях не надо</span>
-               </div>
+               <div class="role-card"><span class="role-sigil">?</span><b>РОЛЬ СКРЫТА</b></div>
                <button class="btn btn-primary btn-wide" data-on:click="$reveal = true"
                  data-show="!$reveal">Показать роль</button>
-               <div data-show="$reveal" class="role-card role-open tone-bg-${me.role}">
+               <div data-show="$reveal" class="role-card role-open">
                  <b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
                  <p>${esc(roleHint(me.role))}</p>
                </div>`
-              : `<div class="role-card role-open tone-bg-${me.role}">
-                 <b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
-                 <p>${esc(roleHint(me.role))}</p>
-               </div>`
+              : `<div class="role-card role-open"><b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
+                 <p>${esc(roleHint(me.role))}</p></div>`
           }
         </div>
         <div class="modal-section">

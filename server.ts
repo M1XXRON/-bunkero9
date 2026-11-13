@@ -314,27 +314,6 @@ async function handleAction(
 
 // ---------- страницы ----------
 
-function appHtml(snapshot: any, origin: string): string {
-  return `<!doctype html>
-<html lang="ru"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
-<link rel="stylesheet" href="/style.css?v=2">
-<script type="module" src="/vendor/datastar-1.0.5.js"></script>
-<script type="module" src="/sound.js"></script>
-</head><body class="game">
-${renderApp(snapshot, origin)}
-<script>
-document.addEventListener("click", (e) => {
-  const t = e.target;
-  if (t instanceof HTMLElement && t.closest(".modal-backdrop") && t.classList.contains("modal-backdrop")) {
-    t.style.display = "none";
-  }
-});
-</script>
-</body></html>`;
-}
-
 function landingHtml(origin: string, error = ""): string {
   const avatars = AVATARS.map(
     (a, i) =>
@@ -343,66 +322,59 @@ function landingHtml(origin: string, error = ""): string {
   return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>БУНКЕР·9 — социальная игра «Сигнал тишины»</title>
-<meta name="description" content="Социальная игра на 5–15 человек: бункер, роли, карты, день и ночь, голосование. Заходи по ссылке с телефона или компьютера.">
-<meta property="og:title" content="БУНКЕР·9 — Сигнал тишины">
-<meta property="og:description" content="Бункер на 5–15 человек: раскрывай карты, ищи заражённых, голосуй. Одна ссылка — и вы играете.">
-<meta property="og:type" content="website">
-<link rel="stylesheet" href="/style.css?v=2">
+<title>БУНКЕР·9 — Сигнал тишины</title>
+<link rel="stylesheet" href="/style.css?v=3">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <main class="landing-main">
   <section class="landing-hero">
-    <div class="hero-brand">
-      <span class="wordmark-mark">9</span>
-      <span class="wordmark-text">БУНКЕР</span>
-    </div>
-    <p class="tagline">СИГНАЛ ТИШИНЫ</p>
-    <p class="prose">
-      Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть
-      за собой гермодверь. Внутри — еда, генератор и чужие голоса за стеной.
-      И кто-то из вас не был человеком ещё вчера.
-    </p>
-    <div class="hero-points">
-      <div class="point"><b>01</b><span>Роли: живой, врач, заражённый</span></div>
-      <div class="point"><b>02</b><span>Пять личных карт каждый день</span></div>
-      <div class="point"><b>03</b><span>Голосование и ночь — с таймером</span></div>
-    </div>
-    <div class="hero-note">
-      <span class="eyebrow">ПРАВИЛО БУНКЕРА</span>
-      <p>Одна карта о себе — каждый день. Один выживший — каждый рассвет.
-      Не показывайте экран соседям.</p>
-    </div>
+    <h1 class="wordmark">БУНКЕР<span class="wordmark-mark">·9</span></h1>
+    <p class="tagline">Сигнал тишины</p>
+    <p class="prose">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь. И кто-то внутри не был человеком ещё вчера.</p>
+    <ul class="facts"><li>5–15 игроков</li><li>день и ночь</li><li>один голос — один изгнанный</li></ul>
   </section>
-
-  <section class="landing-card">
+  <section class="landing-card panel">
     ${error ? `<p class="toast show">${error}</p>` : ""}
-    <div class="card-block">
+    <form method="post" action="/act/create" class="stack">
       <span class="eyebrow">СОЗДАТЬ БУНКЕР</span>
-      <form method="post" action="/act/create" class="stack">
-        <label>Позывной
-          <input name="name" maxlength="16" required autocomplete="nickname" placeholder="Например, Ворон">
-        </label>
-        <fieldset class="avatars">${avatars}</fieldset>
-        <button class="btn btn-primary btn-wide" type="submit">Открыть бункер →</button>
-      </form>
-    </div>
-    <div class="card-divider"></div>
-    <div class="card-block">
+      <label>Позывной <input name="name" maxlength="16" required placeholder="Например, Ворон"></label>
+      <fieldset class="avatars">${avatars}</fieldset>
+      <button class="btn btn-primary btn-wide" type="submit">Открыть бункер</button>
+    </form>
+    <form method="post" action="/act/join" class="stack">
       <span class="eyebrow">ВОЙТИ ПО КОДУ</span>
-      <form method="post" action="/act/join" class="stack">
-        <div class="join-row">
-          <input name="code" maxlength="4" required class="code-input" placeholder="КОД" aria-label="Код комнаты">
-          <input name="name" maxlength="16" required autocomplete="nickname" placeholder="Позывной">
-        </div>
-        <input type="hidden" name="avatar" value="${AVATARS[1]}">
-        <button class="btn btn-secondary btn-wide" type="submit">Войти в бункер</button>
-      </form>
-    </div>
-    <p class="landing-note">Работает в браузере, на телефоне и компьютере.
-    Адрес для друзей: <b>${origin}</b></p>
+      <div class="join-row">
+        <input name="code" maxlength="4" required placeholder="КОД" class="code-input">
+        <input name="name" maxlength="16" required placeholder="Позывной">
+      </div>
+      <input type="hidden" name="avatar" value="${AVATARS[1]}">
+      <button class="btn btn-secondary btn-wide" type="submit">Войти</button>
+    </form>
+    <p class="note">Адрес: ${origin}</p>
   </section>
 </main></body></html>`;
+}
+
+function appHtml(snapshot: any, origin: string): string {
+  return `<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
+<link rel="stylesheet" href="/style.css?v=3">
+<script type="module" src="/sound.js"></script>
+<script type="module" src="/vendor/datastar-1.0.5.js"></script>
+</head><body class="game">
+${renderApp(snapshot, origin)}
+<script>
+// лента и модалки живут вне патчей, но ошибки сервера надо уметь гасить
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t instanceof HTMLElement && t.closest('.modal-backdrop') && t.classList.contains('modal-backdrop')) {
+    t.style.display = 'none';
+  }
+});
+</script>
+</body></html>`;
 }
 
 // ---------- сервер ----------
