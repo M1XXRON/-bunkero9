@@ -283,6 +283,21 @@ async function handleAction(
   origin: string,
 ): Promise<Response> {
   const session = sessionOf(sid);
+
+  // Cookie живёт месяц, а комната — нет: cleanupRooms убирает лобби без
+  // подключённых (и игрока из него через 2 мин), сервер может подняться с
+  // чистой базой. Старая сессия при этом запирала игрока на лендинге с
+  // «Вы уже в бункере.» без единой возможности выйти. Если комната или игрок
+  // исчезли — сессия битая, начинаем с чистого листа.
+  if ((session.room || session.player) && !snapshotFor(session)) {
+    session.room = null;
+    session.player = null;
+    session.stream = null;
+    session.phaseKey = "";
+    session.lastPayload = "";
+    saveSession(sid, null, null, null);
+  }
+
   const payload = await readPayload(req);
   const room = session.room ? engine.rooms.get(session.room) : null;
   const playerId = session.player;

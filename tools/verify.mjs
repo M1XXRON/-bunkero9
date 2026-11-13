@@ -100,4 +100,11 @@ if (httpCode !== 0) {
   process.exit(1);
 }
 
-console.log("\n✓ verify: типы, формат, боты 5/15, HTTP-проверки — всё зелёное");
+// 4. битая сессия (комната исчезла, cookie остался) не должна запирать лендинг
+const staleCode = await run(["tools/stale-session-e2e.mjs"]);
+if (staleCode !== 0) {
+  console.error("\n✗ битая сессия: провал");
+  process.exit(1);
+}
+
+console.log("\n✓ verify: типы, формат, боты 5/15, HTTP-проверки, битая сессия — всё зелёное");
