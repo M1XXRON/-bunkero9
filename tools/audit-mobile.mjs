@@ -61,6 +61,8 @@ const MEASURE = `(() => {
     chat: box('.chat-panel'),
     loop: box('.loop-panel'),
     overflow: overflowing.slice(0, 5),
+    waiting: (q('.vote-waiting') || {}).textContent?.replace(/\s+/g, ' ').trim() || null,
+    banner: (q('#phaseBanner') || {}).textContent || null,
   });
 })()`;
 
@@ -132,7 +134,7 @@ async function main() {
     const btn = (re) => [...root.querySelectorAll('button')].find((b) => re.test(b.textContent));
     const show = btn(/Показать роль/i);
     if (show) { show.click(); return 'роль показана'; }
-    const close = btn(/Закрыть|Понятно|Дальше|Далее|×/i);
+    const close = btn(/Закрыть|Понятно|Дальше|Далее|Пропустить|×/i);
     if (close) { close.click(); return 'закрыто'; }
     return 'нечего закрывать';
   })()`;

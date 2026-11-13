@@ -219,6 +219,14 @@
       else if (action === 'skip') askSkip();
       else if (action === 'confirm-skip') confirmSkip();
       else if (action === 'close-modal') closeModal();
+      else if (action === 'onboard-next') {
+        if ((state.onboardStep || 0) >= ONBOARD.length - 1) finishOnboarding();
+        else {
+          state.onboardStep = (state.onboardStep || 0) + 1;
+          openModal(onboardHtml(), 'onboard', true);
+        }
+      }
+      else if (action === 'onboard-skip') finishOnboarding();
       else if (action === 'chat-tab') switchTab(button.dataset.tab);
       else if (action === 'sound') toggleSound();
       else if (action === 'show-end') showEndOverlay(true);
@@ -285,6 +293,7 @@
         ensureTabAvailable();
       }
       handlePhaseSound(previous, snapshot);
+      announcePhase(previous, snapshot);
       handleAutoTab(previous, snapshot);
       handleUnread(previous, snapshot);
       render(snapshot);
@@ -297,7 +306,10 @@
       ) {
         state.roleAutoOpenedGame = snapshot.gameId;
         setTimeout(() => {
-          if (state.snapshot?.state === 'intro' && !state.modalOpen) openCharacter(true);
+          if (state.snapshot?.state === 'intro' && !state.modalOpen) {
+            if (needsOnboarding()) startOnboarding();
+            else openCharacter(true);
+          }
         }, 650);
       }
       if (snapshot.state === 'end' && !state.endDismissed) {
@@ -528,6 +540,123 @@
 
     renderChatFeed(el.lobbyChatFeed, lobbyMessages(snapshot), { lobby: true });
     updateLobbyChatForm(snapshot);
+  }
+
+  // ---------- лента фазы и потери ----------
+
+  function phaseBannerText(snapshot) {
+    const day = snapshot.day;
+    if (snapshot.state === 'intro') return 'РОЛИ РОЗДАНЫ';
+    if (snapshot.state === 'reveal') return `ДЕНЬ ${day} · РАСКРЫТИЕ КАРТ`;
+    if (snapshot.state === 'discussion') return `ДЕНЬ ${day} · ОБСУЖДЕНИЕ`;
+    if (snapshot.state === 'vote') return `ДЕНЬ ${day} · ГОЛОСОВАНИЕ`;
+    if (snapshot.state === 'night') return `НОЧЬ ${day} · СВЕТ ГАСНЕТ`;
+    if (snapshot.state === 'end') return 'ПРОТОКОЛ ЗАВЕРШЁН';
+    return '';
+  }
+
+  let bannerTimer = null;
+
+  function showBanner(text, tone = 'day', ms = 2800) {
+    const node = document.getElementById('phaseBanner');
+    if (!node || !text) return;
+    node.textContent = text;
+    node.dataset.tone = tone;
+    node.classList.add('show');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => node.classList.remove('show'), ms);
+  }
+
+  // Сравниваем с предыдущим снапшотом: так не нужны свои счётчики,
+  // а потери ловятся и при возврате из фона.
+  function announcePhase(previous, snapshot) {
+    if (!snapshot || snapshot.state === 'lobby' || !previous) return;
+    const sameRoom = previous.gameId === snapshot.gameId;
+    if (sameRoom) {
+      const known = new Set((previous.players || []).filter((p) => !p.alive).map((p) => p.id));
+      const fresh = snapshot.players.filter((p) => !p.alive && !p.left && p.death && !known.has(p.id));
+      if (fresh.length) {
+        const p = fresh[0];
+        const cause = p.death.cause === 'exile' ? 'ИЗГНАН' : 'ПОГИБ';
+        const role = p.role ? ` · ${(ROLE_META[p.role] || {}).name || p.role}` : '';
+        showBanner(`${cause} · ${p.name}${role}`, 'bad', 4500);
+        return;
+      }
+    }
+    const changed = previous.state !== snapshot.state || previous.day !== snapshot.day;
+    if (changed) {
+      showBanner(phaseBannerText(snapshot), snapshot.state === 'night' ? 'night' : 'day');
+    }
+  }
+
+  // ---------- онбординг ----------
+
+  const ONBOARD = [
+    {
+      kicker: '01 · ДОСЬЕ',
+      title: 'Ваша роль — только для вас',
+      body: 'Кнопка «Досье» в верхней панели: там роль, пять личных карт и подсказки. Каждый день вы раскрываете одну карту — её увидят все остальные. Скрытые карты не показывает никто.',
+    },
+    {
+      kicker: '02 · СВЯЗЬ',
+      title: 'Чат решает исход',
+      body: 'Днём говорит зал. Ночью заражённые шепчутся в своём канале, а погибшие — в канале мёртвых. Пишите коротко: у обсуждения таймер, и по нему видно, что осталось.',
+    },
+    {
+      kicker: '03 · РЕСУРСЫ',
+      title: 'Бункер считает всё',
+      body: 'Еда уходит на каждого живого, энергия тает, медикаменты тратит врач. Если еда или энергия дойдут до нуля, на рассвете погибнет случайный выживший.',
+    },
+  ];
+
+  function needsOnboarding() {
+    try {
+      return !localStorage.getItem('bunker9-onboarded');
+    } catch {
+      return false;
+    }
+  }
+
+  function onboardHtml() {
+    const step = Math.min(Math.max(state.onboardStep || 0, 0), ONBOARD.length - 1);
+    const page = ONBOARD[step];
+    const last = step === ONBOARD.length - 1;
+    const dots = ONBOARD.map((_, i) => `<i class="${i === step ? 'on' : ''}"></i>`).join('');
+    return `
+      <div class="modal modal-onboard" role="document">
+        <div class="modal-head">
+          <span class="eyebrow">ПЕРВЫЙ РАЗ В БУНКЕРЕ</span>
+          <h2>${esc(page.kicker)}</h2>
+          <p>${esc(page.title)}</p>
+        </div>
+        <div class="modal-section"><p>${esc(page.body)}</p></div>
+        <div class="onboard-foot">
+          <span class="onboard-dots">${dots}</span>
+          <button class="btn btn-ghost btn-small" data-action="onboard-skip">Пропустить</button>
+          <button class="btn btn-primary" data-action="onboard-next">${last ? 'Понятно' : 'Дальше →'}</button>
+        </div>
+      </div>`;
+  }
+
+  function startOnboarding() {
+    state.onboardStep = 0;
+    openModal(onboardHtml(), 'onboard', true);
+  }
+
+  function finishOnboarding() {
+    try {
+      localStorage.setItem('bunker9-onboarded', '1');
+    } catch {
+      /* приватный режим — не страшно, покажем в следующий раз */
+    }
+    closeModal();
+    // сразу после знакомства — досье с ролью, раз уж человек не видел её
+    const snapshot = state.snapshot;
+    if (snapshot && snapshot.state === 'intro' && state.roleSeenGame !== snapshot.gameId) {
+      setTimeout(() => {
+        if (state.snapshot?.state === 'intro' && !state.modalOpen) openCharacter(true);
+      }, 260);
+    }
   }
 
   function renderGame(snapshot) {
@@ -868,6 +997,14 @@
     `;
   }
 
+  function waitingText(alive) {
+    const waiters = alive.filter((player) => !player.votedFor);
+    if (!waiters.length) return 'Все голоса собраны · хост может закрыть голосование';
+    const names = waiters.map((player) => player.name);
+    const short = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} и ещё ${names.length - 3}`;
+    return `Ждут голоса: ${esc(short)} · не успевшие воздержатся`;
+  }
+
   function voteHtml(snapshot) {
     const me = snapshot.me;
     const alive = snapshot.players.filter((player) => player.alive);
@@ -905,7 +1042,7 @@
         </div>
         <div class="vote-waiting">
           <span class="waiting-dots"><i></i><i></i><i></i></span>
-          Ждём голоса: ${alive.length - voted} · не успевшие воздержатся
+          ${waitingText(alive)}
         </div>
         ${voteTallyHtml(snapshot)}
       </div>
