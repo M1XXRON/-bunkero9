@@ -7,7 +7,7 @@
 import {
   renderApp,
   renderBoard,
-  renderOverlay,
+  renderDossierBody,
   renderTopbar,
   renderTabs,
   renderFeed,
@@ -180,7 +180,7 @@ function broadcast(room: any, origin: string) {
     let payload = "";
     payload += patchElement(renderTopbar(snapshot));
     payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
-    payload += patchElement(renderOverlay(snapshot));
+    payload += patchElement(renderDossierBody(snapshot));
     payload += patchSelector("title", renderTitle(snapshot));
     if (banner)
       payload += patchElement(
@@ -361,6 +361,7 @@ function landingHtml(origin: string, error = ""): string {
   return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>БУНКЕР·9 — Сигнал тишины</title>
 <link rel="stylesheet" href="/style.css?v=3">
 <script type="module" src="/sound.js"></script>
@@ -398,6 +399,7 @@ function appHtml(snapshot: any, origin: string): string {
   return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
 <link rel="stylesheet" href="/style.css?v=3">
 <script type="module" src="/sound.js"></script>
@@ -489,7 +491,7 @@ Bun.serve({
           let payload = "";
           payload += patchElement(renderTopbar(snapshot));
           payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
-          payload += patchElement(renderOverlay(snapshot));
+          payload += patchElement(renderDossierBody(snapshot));
           controller.enqueue(enc.encode(payload));
         },
         cancel() {

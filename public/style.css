@@ -3,6 +3,12 @@
    Принципы: тёмный фон, янтарный акцент, моноширинные подписи, плотная сетка. */
 
 :root {
+  /* тёмная схема для нативных контролов, скроллбаров и канвы */
+  color-scheme: dark;
+  accent-color: #f2b35c;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-width: thin;
+
   --bg: #08090b;
   --bg-soft: #0b0d11;
   --panel: rgba(17, 20, 25, 0.92);
@@ -1289,4 +1295,53 @@ input:focus {
   margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid var(--line);
+}
+
+/* выделение текста и плейсхолдеры — в тон теме */
+::selection {
+  background: rgba(242, 179, 92, 0.28);
+  color: var(--text);
+}
+
+::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+
+/* видимый фокус для клавиатуры */
+:where(button, input, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* нативный диалог вместо самодельного оверлея */
+dialog.sheet {
+  width: min(560px, 100%);
+  max-height: 86dvh;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: #0d1014;
+  color: var(--text);
+  overscroll-behavior: contain;
+}
+
+dialog.sheet::backdrop {
+  background: rgba(4, 5, 7, 0.84);
+  overscroll-behavior: contain;
+}
+
+dialog.sheet[open] {
+  animation: sheet-in 160ms ease-out;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

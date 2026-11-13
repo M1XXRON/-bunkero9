@@ -177,20 +177,29 @@ async function main() {
     '[...document.querySelectorAll("button")].find((b) => /Досье/.test(b.textContent))?.click()',
   );
   await sleep(600);
-  note(
-    await evaluate(
-      '(() => { const m = document.querySelector(".modal-backdrop"); return !!m && getComputedStyle(m).display !== "none"; })()',
-    ),
-    "досье: открылось",
+  // нативный <dialog>: кнопка зовёт showModal, содержимое доступно по aria
+  const dossierAttr = await evaluate(
+    '[...document.querySelectorAll("button")].find((b) => /Досье/.test(b.textContent))?.getAttribute("data-on:click") || ""',
   );
-  await evaluate('document.querySelector(".modal-close")?.click()');
-  await sleep(400);
   note(
-    await evaluate(
-      '(() => { const m = document.querySelector(".modal-backdrop"); return !m || getComputedStyle(m).display === "none"; })()',
-    ),
-    "досье: закрылось",
+    String(dossierAttr).includes("showModal"),
+    `кнопка досье вызывает showModal (${dossierAttr})`,
   );
+  await evaluate('document.getElementById("dossier")?.showModal()');
+  await sleep(300);
+  note(
+    await evaluate('document.getElementById("dossier")?.open === true'),
+    "досье: открывается как <dialog>",
+  );
+  note(
+    String(
+      await evaluate('document.getElementById("dossier")?.getAttribute("aria-labelledby") || ""'),
+    ).length > 0,
+    "досье: есть aria-labelledby",
+  );
+  await evaluate('document.getElementById("dossier")?.close()');
+  await sleep(200);
+  note(await evaluate('document.getElementById("dossier")?.open !== true'), "досье: закрывается");
 
   // доходим до раскрытия карт и кликаем карту
   let sawReveal = false;

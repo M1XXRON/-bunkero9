@@ -147,8 +147,8 @@ function topbar(snap: Snapshot): string {
       <span class="resource${low(res.meds, 0)}">МЕДЫ <b>${res.meds}</b></span>
     </div>
     <div class="top-actions">
-      <button class="btn btn-secondary btn-small" data-on:click="$dossier = true">Досье</button>
-      <button class="btn btn-ghost btn-small" data-on:click="$rules = true">Правила</button>
+      <button class="btn btn-secondary btn-small" data-on:click="document.getElementById('dossier').showModal()">Досье</button>
+      <button class="btn btn-ghost btn-small" data-on:click="document.getElementById('rules').showModal()">Правила</button>
       <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Выйти">×</button>
     </div>
   </header>`;
@@ -441,7 +441,7 @@ function scene(snap: Snapshot): string {
         <h3>Добро пожаловать в «Кольцо-9»</h3>
         <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и чужие голоса за стеной.</p>
         <p class="note">Роли уже розданы. Первый день начнётся автоматически.</p>
-        <button class="btn btn-secondary" data-on:click="$dossier = true">Открыть досье</button>
+        <button class="btn btn-secondary" data-on:click="document.getElementById('dossier').showModal()">Открыть досье</button>
       </div>`,
     reveal: () => revealScene(snap),
     discussion: () => `<div class="action-block">
@@ -502,7 +502,7 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
     <section class="panel chat-panel">
       <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Лобби</h2></div></header>
       <div id="chatTabs">${tabs}</div>
-      <div class="chat-feed" id="chatFeed">${feedHtml(snap, activeTab)}</div>
+      <div class="chat-feed" id="chatFeed" role="log" aria-live="polite" aria-relevant="additions" aria-label="Лента чата">${feedHtml(snap, activeTab)}</div>
       <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
         <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в зал…"
           data-bind="msg" data-preserve-attr="value" ${allowed.length ? "" : "disabled"}>
@@ -514,7 +514,7 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
 
 // ---------- модалки ----------
 
-function dossier(snap: Snapshot): string {
+function dossierBody(snap: Snapshot): string {
   const me = snap.me;
   const roleHidden = snap.state !== "end";
   const traits = me.traits
@@ -527,12 +527,10 @@ function dossier(snap: Snapshot): string {
     )
     .join("");
   return `
-    <div class="modal-backdrop" style="display: none" data-show="$dossier" data-on:click.self="$dossier = false">
-      <div class="modal">
-        <button class="modal-close" data-on:click="$dossier = false">×</button>
+        <button class="modal-close" data-on:click="document.getElementById('dossier').close()" aria-label="Закрыть досье">×</button>
         <div class="modal-head">
           <span class="eyebrow">ЛИЧНОЕ ДЕЛО</span>
-          <h2>${esc(me.name)}</h2>
+          <h2 id="dossierTitle">${esc(me.name)}</h2>
         </div>
         <div class="modal-section">
           ${
@@ -552,9 +550,7 @@ function dossier(snap: Snapshot): string {
         <div class="modal-section">
           <span class="eyebrow">КАРТЫ ПЕРСОНАЖА</span>
           ${traits}
-        </div>
-      </div>
-    </div>`;
+        </div>`;
 }
 
 function roleHint(role: string | null): string {
@@ -569,17 +565,13 @@ function roleHint(role: string | null): string {
 
 function rules(): string {
   return `
-    <div class="modal-backdrop" style="display: none" data-show="$rules" data-on:click.self="$rules = false">
-      <div class="modal">
-        <button class="modal-close" data-on:click="$rules = false">×</button>
-        <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2>Как выжить</h2></div>
+        <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
+        <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
         <div class="modal-section">
           <p><b>День.</b> Раскройте одну карту, обсудите и проголосуйте. Изгнанный выбывает, его роль раскрывается. При равенстве голосов никто не уходит.</p>
           <p><b>Ночь.</b> Заражённые вместе выбирают жертву. Врач может спасти одного, потратив медикамент.</p>
           <p><b>Победа.</b> Живые — когда заражённых не осталось. Заражённые — когда их не меньше, чем живых.</p>
-        </div>
-      </div>
-    </div>`;
+        </div>`;
 }
 
 // ---------- сборка ответов ----------
@@ -587,7 +579,7 @@ function rules(): string {
 // #board (он же .game-grid), внутри — три колонки. Патчи заменяют эти узлы.
 
 export function renderApp(snap: Snapshot, origin: string): string {
-  const signals = `{dossier: false, rules: false, reveal: false, msg: '', tab: '${snap.chat.day ? "day" : snap.chat.mafia ? "mafia" : "dead"}'}`;
+  const signals = `{reveal: false, msg: '', tab: '${snap.chat.day ? "day" : snap.chat.mafia ? "mafia" : "dead"}'}`;
   // Оболочка одна на всё приложение: если менять её id при переходе
   // лобби -> игра, старые правила лобби продолжают применяться к игре.
   const stateClass = snap.state === "lobby" ? "state-lobby" : "state-game";
@@ -596,7 +588,10 @@ export function renderApp(snap: Snapshot, origin: string): string {
       ${topbar(snap)}
       <div id="banner" class="phase-banner"></div>
       ${renderBoard(snap, origin)}
-      <div id="overlay">${dossier(snap)}${rules()}</div>
+      <dialog id="dossier" class="sheet" aria-labelledby="dossierTitle">
+        <div id="dossierBody">${dossierBody(snap)}</div>
+      </dialog>
+      <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules()}</dialog>
       <div id="error"></div>
     </section>
   </div>`;
@@ -612,8 +607,10 @@ export function renderBoard(snap: Snapshot, origin: string, tab = "day"): string
   return `<main id="board" class="game-grid">${playersPanel(snap)}${scene(snap)}${chatPanel(snap, tab)}</main>`;
 }
 
-export function renderOverlay(snap: Snapshot): string {
-  return `<div id="overlay">${dossier(snap)}${rules()}</div>`;
+// Содержимое досье патчится отдельно: диалог живёт в оболочке, поэтому морфинг
+// внутренностей не закрывает открытое окно.
+export function renderDossierBody(snap: Snapshot): string {
+  return `<div id="dossierBody">${dossierBody(snap)}</div>`;
 }
 
 export function renderTopbar(snap: Snapshot): string {
