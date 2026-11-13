@@ -71,7 +71,25 @@ function dailyCost(room) {
   return { food: round1(food), energy: round1(energy), crewEat, crewPower, personalEat };
 }
 
-// Разовые припасы: что смена принесла с собой (считаем до старта, по всем картам).
+const RESOURCE_LABEL = { food: 'еда', energy: 'энергия', meds: 'медикаменты' };
+
+// Припасы выдаются не на старте, а в момент вскрытия карты: пока игрок не
+// показал «ящик консервов», бункер этих запасов не видит.
+function grantSupply(room, player, trait) {
+  const effect = effectOf(trait?.value);
+  if (!effect?.supply) return;
+  const parts = [];
+  for (const [key, amount] of Object.entries(effect.supply)) {
+    if (!amount) continue;
+    room.resources[key] = round1((room.resources[key] || 0) + amount);
+    parts.push(`${RESOURCE_LABEL[key] || key} +${amount}`);
+  }
+  if (parts.length) {
+    system(room, `${player.name} вскрывает ${trait.value}: ${parts.join(', ')}.`, 'good');
+  }
+}
+
+// Сумма припасов по всем картам комнаты — для тестов и подсказок.
 function supplyOf(room) {
   const supply = { food: 0, energy: 0, meds: 0 };
   for (const player of room.players) {
@@ -102,7 +120,9 @@ function startResources(total) {
   const energy = Math.max(2, Math.ceil(total / ENERGY_PER_PLAYER));
   return {
     food: (rescue - 1) * total + 6,
-    energy: energy * rescue + 4,
+    // энергии теперь тоже «на день меньше, чем нужно всем»: запас в днях
+    // выровнен с едой, иначе энергия никогда не была узким местом
+    energy: energy * (rescue - 1) + 4,
     meds: 2 + Math.ceil(total / 3),
   };
 }
@@ -518,6 +538,7 @@ function autoReveal(room, player) {
     trait.revealed = true;
     player.revealedThisRound = true;
     revealMessage(room, player, trait);
+    grantSupply(room, player, trait);
   } else {
     player.revealedThisRound = true;
   }
@@ -837,18 +858,6 @@ function startGame(room, playerId, options = {}) {
     }));
   });
 
-  const supply = supplyOf(room);
-  room.resources.food += supply.food;
-  room.resources.energy += supply.energy;
-  room.resources.meds += supply.meds;
-  if (supply.food || supply.energy || supply.meds) {
-    const parts = [
-      supply.food ? `еда +${supply.food}` : '',
-      supply.energy ? `энергия +${supply.energy}` : '',
-      supply.meds ? `медикаменты +${supply.meds}` : '',
-    ].filter(Boolean);
-    system(room, `Припасы смены: ${parts.join(', ')}.`, 'good');
-  }
   system(room, 'СИГНАЛ ТИШИНЫ', 'title');
   system(room, room.story.title, 'title');
   system(room, room.story.premise, 'info');
@@ -1073,6 +1082,7 @@ function revealTrait(code, playerId, index) {
   trait.revealed = true;
   player.revealedThisRound = true;
   revealMessage(room, player, trait);
+  grantSupply(room, player, trait);
   // карта на столе: ждём подтверждения, таймер хода начинается заново
   room.turn.stage = 'confirm';
   const ms = turnMs(room);

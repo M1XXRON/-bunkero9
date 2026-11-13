@@ -80,18 +80,25 @@ function neutralise(target) {
   note(after === base - 1, `электрик: энергия ${base} → ${after}`);
 }
 
-// ---------- 5. припасы на старте ----------
+// ---------- 5. припасы вскрываются картой, а не на старте ----------
 {
   const r = room(5);
   neutralise(r);
   r.players[0].traits[2].value = "ящик консервов";
-  r.players[1].traits[2].value = "канистра бензина";
-  r.players[2].traits[2].value = "медицинская аптечка";
-  const supply = engine.supplyOf(r);
+  const before = r.resources.food;
+  const authored = engine.supplyOf(r);
+  note(authored.food === 5, `в картах смены +${authored.food} еды (ещё не в бункере)`);
+  engine.skipPhase(r.code, r.hostId); // интро -> раскрытие
+  const beforeReveal = r.resources.food;
+  const index = r.players[0].traits.findIndex((t) => t.value === "ящик консервов");
+  engine.revealTrait(r.code, r.hostId, index);
   note(
-    supply.food === 5 && supply.energy === 3 && supply.meds === 2,
-    `припасы: еда +${supply.food}, энергия +${supply.energy}, медики +${supply.meds}`,
+    r.resources.food === beforeReveal + 5,
+    `после вскрытия карты: еда ${beforeReveal} → ${r.resources.food}`,
   );
+  note(beforeReveal <= before, "на старте припасы не начисляются");
+  const line = r.messages.map((m) => m.text).find((t) => t.includes("вскрывает"));
+  note(/еда \+5/.test(line || ""), `в ленте: «${line}»`);
 }
 
 // ---------- 6. расход пишется в чат с модификаторами ----------

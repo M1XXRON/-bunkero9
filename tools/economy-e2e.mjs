@@ -38,15 +38,14 @@ function neutralise(target) {
   }
 }
 
-const base = (room) => {
-  const supply = engine.supplyOf(room);
-  return {
-    food: Math.round((room.resources.food - supply.food) * 10) / 10,
-    energy: Math.round((room.resources.energy - supply.energy) * 10) / 10,
-    foodSupply: supply.food,
-    energySupply: supply.energy,
-  };
-};
+// Припасы теперь выдаются только при вскрытии карт, на старте их нет —
+// значит стартовые запасы можно сравнивать напрямую.
+const base = (room) => ({
+  food: room.resources.food,
+  energy: room.resources.energy,
+  foodSupply: 0,
+  energySupply: 0,
+});
 
 const small = makeRoom(5);
 const big = makeRoom(15);
