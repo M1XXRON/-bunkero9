@@ -65,8 +65,35 @@ function sidOf(req: Request): string {
 
 // Брошенные комнаты: в прежнем сервере engine.cleanupRooms() крутился
 // по таймеру, при переносе на Bun вызов потеряли — комнаты копились в памяти.
+// Брошенная комната (все закрыли вкладки) раньше жила вечно: на вебе игрок
+// никогда не помечается offline, поэтому правило движка «никто не подключён
+// 30 минут» не срабатывало. Считаем иначе — по живости SSE и активности:
+// ни одного открытого потока + ни одного изменения за IDLE_MINUTES.
+const IDLE_MS = Number(process.env.BUNKER_IDLE_MIN || 30) * 60_000;
+
+function hasLiveStream(code: string): boolean {
+  for (const session of sessions.values()) {
+    if (session.room === code && session.stream) return true;
+  }
+  return false;
+}
+
+function reapIdleRooms(): void {
+  for (const room of [...engine.rooms.values()]) {
+    const last = room.touchedAt || room.createdAt || 0;
+    if (Date.now() - last < IDLE_MS) continue;
+    if (hasLiveStream(room.code)) continue;
+    clearTimeout(room.timer);
+    botPhase.delete(room.code);
+    engine.rooms.delete(room.code);
+    dropRoom(room.code);
+    dropSessionsOfRoom(room.code);
+  }
+}
+
 setInterval(() => {
   engine.cleanupRooms();
+  reapIdleRooms();
   // в базе не должно оставаться комнат, которых уже нет в памяти
   for (const row of loadRooms()) {
     if (!engine.rooms.has(row.code)) {
@@ -406,6 +433,7 @@ function broadcast(room: any, origin: string) {
 }
 
 engine.setChangeHandler((room: any) => {
+  room.touchedAt = Date.now();
   saveRoom(room);
   // финал партии пишем в историю один раз
   if (room.state === "end" && room.savedGameId !== room.gameId) {
@@ -866,6 +894,7 @@ Bun.serve({
       // После рестарта сервера resumeRoom помечает всех offline. broadcast() таким
       // игрокам не шлёт НИЧЕГО — вкладка получала один снимок и замирала навсегда,
       // хотя соединение живое. Живой поток = игрок снова онлайн.
+      data.room.touchedAt = Date.now();
       if (data.player.connected === false) {
         data.player.connected = true;
         data.player.disconnectedAt = null;
