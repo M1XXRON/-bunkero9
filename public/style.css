@@ -2354,3 +2354,307 @@ body.landing {
     width: min(268px, calc(100vw - 24px));
   }
 }
+
+/* ---------- лента чата v2: раскрытия, дни, события ---------- */
+
+.chat-feed {
+  gap: 7px;
+}
+
+/* сообщение игрока: аватар + имя + текст, свои — с акцентом */
+.chat-msg {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-areas:
+    "ava author"
+    "ava text";
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid #2a2a2a;
+}
+
+.chat-msg:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.chat-ava {
+  grid-area: ava;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--card-3);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.chat-author {
+  grid-area: author;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.chat-text {
+  grid-area: text;
+}
+
+.chat-msg.mine {
+  border-left-color: var(--accent);
+  background: rgba(255, 53, 0, 0.06);
+}
+
+.chat-msg.mine .chat-author {
+  color: var(--accent);
+}
+
+/* раскрытие карты — компактная строка события */
+.chat-reveal {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-areas:
+    "ava name"
+    "ava line";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 6px 9px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: linear-gradient(90deg, rgba(255, 53, 0, 0.07), rgba(255, 53, 0, 0) 65%);
+}
+
+.cr-avatar {
+  grid-area: ava;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--card-3);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.cr-name {
+  grid-area: name;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.cr-name span {
+  font-weight: 400;
+  color: var(--dim);
+}
+
+.cr-line {
+  grid-area: line;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cr-cat {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.cr-val {
+  font-size: 12px;
+  color: #fff;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* разделитель дня и фаз */
+.chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 2px;
+}
+
+.chat-divider .cd-line {
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+.chat-divider .cd-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.chat-divider.day .cd-text {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.chat-divider.day .cd-line {
+  background: linear-gradient(90deg, transparent, rgba(255, 53, 0, 0.5), transparent);
+}
+
+/* события: гибель, изгнание, тревога */
+.chat-event {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  line-height: 1.45;
+  background: var(--card-2);
+  border-left: 2px solid var(--line);
+}
+
+.chat-event .ce-ico {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--dim);
+}
+
+.chat-event.bad {
+  border-left-color: var(--bad);
+  background: rgba(255, 90, 60, 0.08);
+  color: #ffc9bd;
+}
+
+.chat-event.bad .ce-ico {
+  color: var(--bad);
+}
+
+.chat-event.warn {
+  border-left-color: var(--warn);
+  background: rgba(240, 179, 87, 0.07);
+  color: #f3dcae;
+}
+
+.chat-event.warn .ce-ico {
+  color: var(--warn);
+}
+
+.chat-event.good {
+  border-left-color: var(--ok);
+  background: rgba(76, 175, 80, 0.08);
+  color: #bfe6c1;
+}
+
+.chat-event.good .ce-ico {
+  color: var(--ok);
+}
+
+/* прочее: служебные заметки и заголовок партии */
+.chat-note {
+  font-size: 12px;
+  color: #7a7a7a;
+  padding-left: 2px;
+}
+
+.chat-title {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fff;
+  text-align: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* итоги голосования — полоски */
+.chat-vote {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--card-2);
+  border-left: 2px solid #4a4a4a;
+}
+
+.cv-head {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 7px;
+}
+
+.cv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 84px) minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.cv-name {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cv-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.cv-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(255, 53, 0, 0.85), rgba(255, 53, 0, 0.45));
+}
+
+.cv-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #fff;
+  text-align: right;
+}
+
+.cv-skip,
+.cv-empty {
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* разделители не должны схлопывать линии на длинных фразах */
+.chat-divider .cd-line {
+  min-width: 12px;
+}
+
+.chat-divider .cd-text {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

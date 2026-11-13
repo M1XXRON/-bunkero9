@@ -835,6 +835,28 @@ document.addEventListener('click', (e) => {
   window.addEventListener('resize', () => hide(0));
   document.addEventListener('keydown', (e) => e.key === 'Escape' && hide(0));
 })();
+
+// Лента чата: держимся за низ, если игрок сам не отлистал вверх.
+(function () {
+  const pinned = new WeakMap();
+  let current = null;
+  const sync = () => {
+    const feed = document.getElementById('chatFeed');
+    if (!feed) return;
+    if (feed !== current) {
+      current = feed;
+      pinned.set(feed, true);
+      feed.addEventListener('scroll', () => {
+        pinned.set(feed, feed.scrollHeight - feed.scrollTop - feed.clientHeight < 56);
+      });
+      feed.scrollTop = feed.scrollHeight;
+      return;
+    }
+    if (pinned.get(feed)) feed.scrollTop = feed.scrollHeight;
+  };
+  new MutationObserver(sync).observe(document.body, { childList: true, subtree: true });
+  sync();
+})();
 </script>
 </body></html>`;
 }

@@ -685,16 +685,89 @@ function scene(snap: Snapshot): string {
     </section>`;
 }
 
+// Лента чата: у каждого типа сообщения свой вид, чтобы по ней можно было
+// читать партию глазами, а не расшифровывать строки.
+const BOLT_ICON =
+  '<svg viewBox="0 0 12 12" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M6.6 0.6 2.2 6.5h2.6L4.9 11.4l4.6-6.1H6.8z"/></svg>';
+const SKULL_ICON =
+  '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M2.2 5.2a3.8 3.8 0 0 1 7.6 0v1.6c0 .9-.6 1.4-1.3 1.4H9v1.2H3v-1.2h-.5c-.7 0-1.3-.5-1.3-1.4z"/><circle cx="4.4" cy="5.6" r=".8" fill="currentColor" stroke="none"/><circle cx="7.6" cy="5.6" r=".8" fill="currentColor" stroke="none"/></svg>';
+const SUN_ICON =
+  '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="6" cy="6" r="2.2"/><path d="M6 .8v1.4M6 9.8v1.4M.8 6h1.4M9.8 6h1.4M2.3 2.3l1 1M8.7 8.7l1 1M9.7 2.3l-1 1M3.3 8.7l-1 1"/></svg>';
+
 function feedHtml(snap: Snapshot, activeTab = "day"): string {
   const channel = activeTab || "day";
+  const myId = snap.me.id;
   return snap.messages
     .filter((m) => m.kind !== "chat" || m.channel === channel || m.channel === "system")
     .slice(-60)
     .map((m) => {
       if (m.kind === "chat") {
-        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span class="chat-text">${esc(m.text)}</span></div>`;
+        const mine = String((m as { authorId?: string }).authorId || "") === myId;
+        return `<div class="chat-msg${mine ? " mine" : ""}">
+          <span class="chat-ava">${esc(m.avatar || "•")}</span>
+          <span class="chat-author">${esc(m.author)}</span>
+          <span class="chat-text">${esc(m.text)}</span>
+        </div>`;
       }
-      return `<div class="chat-system tone-${esc(m.tone || "info")}">${esc(m.text)}</div>`;
+
+      // раскрытие карты — карточкой: кто, какая категория и что именно
+      if (m.kind === "reveal") {
+        const card = m as unknown as { traitLabel?: string; traitValue?: string };
+        return `<div class="chat-reveal">
+          <span class="cr-avatar">${esc(m.avatar || "•")}</span>
+          <span class="cr-name">${esc(m.author)}<span> раскрывает</span></span>
+          <span class="cr-line">
+            <span class="cr-cat">${esc(card.traitLabel || "")}</span>
+            <b class="cr-val">${esc(card.traitValue || "")}</b>
+          </span>
+        </div>`;
+      }
+
+      // итоги голосования: полоски, кто сколько набрал
+      if (m.kind === "vote") {
+        const vote = m as unknown as {
+          votes?: { name: string; count: number }[];
+          skipped?: number;
+        };
+        const list = vote.votes || [];
+        const top = Math.max(1, ...list.map((v) => v.count));
+        const bars = list
+          .map(
+            (v) => `<div class="cv-row">
+              <span class="cv-name">${esc(v.name)}</span>
+              <span class="cv-bar"><i style="width:${Math.round((v.count / top) * 100)}%"></i></span>
+              <span class="cv-count">${v.count}</span>
+            </div>`,
+          )
+          .join("");
+        const skipped = vote.skipped
+          ? `<div class="cv-skip">воздержались · ${vote.skipped}</div>`
+          : "";
+        return `<div class="chat-vote">
+          <div class="cv-head">ИТОГИ ГОЛОСОВАНИЯ</div>
+          ${bars || '<div class="cv-empty">голосов не было</div>'}
+          ${skipped}
+        </div>`;
+      }
+
+      const tone = m.tone || "info";
+      // смена дня и фазы — разделитель на всю ширину ленты
+      if (tone === "phase") {
+        const text = esc(m.text);
+        const day = /^ДЕНЬ\s+\d+$/.test(m.text.trim());
+        return `<div class="chat-divider${day ? " day" : ""} tone-phase">
+          <span class="cd-line"></span>
+          <span class="cd-text">${day ? SUN_ICON : ""}${text}</span>
+          <span class="cd-line"></span>
+        </div>`;
+      }
+      if (tone === "title") return `<div class="chat-title">${esc(m.text)}</div>`;
+      if (tone === "bad" || tone === "good" || tone === "warn") {
+        const icon = tone === "good" ? SUN_ICON : tone === "warn" ? BOLT_ICON : SKULL_ICON;
+        return `<div class="chat-event ${tone} tone-${tone}"><span class="ce-ico">${icon}</span><span>${esc(m.text)}</span></div>`;
+      }
+      if (tone === "muted") return `<div class="chat-note">${esc(m.text)}</div>`;
+      return `<div class="chat-system tone-${esc(tone)}">${esc(m.text)}</div>`;
     })
     .join("");
 }
@@ -866,18 +939,7 @@ export function renderChat(snap: Snapshot): string {
 }
 
 export function renderFeed(snap: Snapshot, activeTab: string): string {
-  const channel = activeTab || "day";
-  const list = snap.messages
-    .filter((m) => m.kind !== "chat" || m.channel === channel || m.channel === "system")
-    .slice(-60)
-    .map((m) => {
-      if (m.kind === "chat") {
-        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span class="chat-text">${esc(m.text)}</span></div>`;
-      }
-      return `<div class="chat-system tone-${esc(m.tone || "info")}">${esc(m.text)}</div>`;
-    })
-    .join("");
-  return `<div id="chatFeed">${list}</div>`;
+  return `<div id="chatFeed">${feedHtml(snap, activeTab)}</div>`;
 }
 
 export function renderTitle(snap: Snapshot): string {

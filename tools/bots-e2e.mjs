@@ -106,7 +106,7 @@ try {
     /ОБСУЖДЕНИЕ|ГОЛОСОВАНИЕ|НОЧЬ|ИТОГ/.test(reached),
     `фазы идут без вмешательства (${reached})`,
   );
-  const reveals = (feed.match(/раскрывает —/g) || []).length;
+  const reveals = (feed.match(/chat-reveal/g) || []).length;
   note(reveals >= 8, `боты раскрывают карты (${reveals} сообщений)`);
 
   // голоса: в фазе голосования боты должны проголосовать сами

@@ -170,6 +170,23 @@ function system(room, text, tone = 'info') {
   return pushMessage(room, { channel: 'system', kind: 'system', tone, text });
 }
 
+// Раскрытие карты — не просто строка текста, а событие: в чате оно рисуется
+// карточкой (кто, какая категория, что именно). Текст оставляем для логов.
+function revealMessage(room, player, trait) {
+  return pushMessage(room, {
+    channel: 'system',
+    kind: 'reveal',
+    tone: 'reveal',
+    text: `${player.name} раскрывает — ${trait.label}: ${trait.value}.`,
+    authorId: player.id,
+    author: player.name,
+    avatar: player.avatar,
+    avatarIndex: player.avatarIndex,
+    traitLabel: trait.label,
+    traitValue: trait.value,
+  });
+}
+
 function privateMessage(room, to, text, tone = 'info') {
   return pushMessage(room, { channel: 'system', kind: 'private', to, tone, text });
 }
@@ -401,7 +418,7 @@ function autoReveal(room, player) {
     const trait = pick(hidden);
     trait.revealed = true;
     player.revealedThisRound = true;
-    system(room, `${player.name} раскрывает — ${trait.label}: ${trait.value}.`, 'reveal');
+    revealMessage(room, player, trait);
   } else {
     player.revealedThisRound = true;
   }
@@ -540,11 +557,19 @@ function resolveVote(room) {
       return `${player ? player.name : '—'} — ${count}`;
     })
     .join(' · ');
-  system(
-    room,
-    `Итоги голосования: ${summary || 'никто не получил голосов'}${skipped ? ` · воздержались — ${skipped}` : ''}.`,
-    'muted',
-  );
+  // Итоги — не строка, а данные: в чате они рисуются полосками голосов.
+  pushMessage(room, {
+    channel: 'system',
+    kind: 'vote',
+    tone: 'vote',
+    text: `Итоги голосования: ${summary || 'никто не получил голосов'}${skipped ? ` · воздержались — ${skipped}` : ''}.`,
+    votes: entries.map(([id, count]) => ({
+      id,
+      name: playerById(room, id)?.name || '—',
+      count,
+    })),
+    skipped,
+  });
 
   const leaders = entries.filter(([, count]) => count === entries[0]?.[1]);
   if (entries.length === 0 || leaders.length !== 1) {
@@ -933,7 +958,7 @@ function revealTrait(code, playerId, index) {
   if (!trait || trait.revealed) return { ok: false, error: 'Эта карта уже раскрыта.' };
   trait.revealed = true;
   player.revealedThisRound = true;
-  system(room, `${player.name} раскрывает — ${trait.label}: ${trait.value}.`, 'reveal');
+  revealMessage(room, player, trait);
   // карта на столе: ждём подтверждения, таймер хода начинается заново
   room.turn.stage = 'confirm';
   const ms = turnMs(room);

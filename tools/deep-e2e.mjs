@@ -181,6 +181,11 @@ async function main() {
     }
   }
 
+  const autoScroll = await evaluate(
+    "(() => { const f = document.getElementById('chatFeed'); return f ? f.scrollHeight - f.scrollTop - f.clientHeight < 12 : false; })()",
+  );
+  note(autoScroll, "чат: лента прижата к низу (автоскролл)");
+
   const timer1 = (await text('(document.querySelector(".phase-timer")||{}).textContent')).trim();
   await sleep(300);
   const timer2 = (await text('(document.querySelector(".phase-timer")||{}).textContent')).trim();
@@ -243,6 +248,20 @@ async function main() {
       await sleep(1200);
       const body = await text("document.body.innerText");
       note(/Карта на столе|на столе/i.test(body), "раскрытие: карта ушла на стол");
+
+      // раскрытие в чате — отдельной карточкой, день и фаза — разделителями
+      const revealCards = await evaluate("document.querySelectorAll('.chat-reveal').length");
+      note(revealCards > 0, `чат: раскрытия карт выделены (${revealCards})`);
+      const revealValue = await evaluate(
+        '(() => { const e = document.querySelector(".chat-reveal .cr-val"); return e ? e.textContent.trim().length : 0; })()',
+      );
+      note(revealValue > 0, "чат: в карточке раскрытия есть значение");
+      const dayDivider = await evaluate("document.querySelectorAll('.chat-divider.day').length");
+      note(dayDivider > 0, `чат: день отбит разделителем (${dayDivider})`);
+      const phaseDivider = await evaluate(
+        "document.querySelectorAll('.chat-divider.tone-phase').length",
+      );
+      note(phaseDivider > 0, `чат: фазы отбиты разделителем (${phaseDivider})`);
       const ownHover = await evaluate(
         '(() => { const r = document.querySelectorAll(".players-row")[0]; const b = r.getBoundingClientRect(); return { x: Math.round(b.left + 60), y: Math.round(b.top + 12) }; })()',
       );
