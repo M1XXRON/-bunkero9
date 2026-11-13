@@ -12,6 +12,7 @@ import {
   renderTabs,
   renderFeed,
   renderError,
+  renderTitle,
 } from './src/render.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -89,6 +90,10 @@ function snapshotFor(session: Session) {
 const patchElement = (html: string) =>
   `event: datastar-patch-elements\ndata: elements ${html.replace(/\n/g, '')}\n\n`;
 
+// Тот же формат, но с адресацией по селектору (например, title)
+const patchSelector = (selector: string, html: string) =>
+  `event: datastar-patch-elements\ndata: selector ${selector}\ndata: elements ${html.replace(/\n/g, '')}\n\n`;
+
 function phaseLabel(snapshot: any): string {
   const day = snapshot.day;
   switch (snapshot.state) {
@@ -131,6 +136,7 @@ function broadcast(room: any, origin: string) {
     payload += patchElement(renderTopbar(snapshot));
     payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
     payload += patchElement(renderOverlay(snapshot));
+    payload += patchSelector('title', renderTitle(snapshot));
     if (banner) payload += patchElement(`<div id="banner" class="phase-banner show" data-tone="${snapshot.state === 'night' ? 'night' : 'day'}">${phaseLabel(snapshot)}</div>`);
 
     if (payload === session.lastPayload) continue;
@@ -279,7 +285,7 @@ function landingHtml(origin: string, error = ''): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>БУНКЕР·9 — Сигнал тишины</title>
-<link rel="stylesheet" href="/style-next.css">
+<link rel="stylesheet" href="/style.css">
 </head><body class="landing">
 <main class="landing-main">
   <section class="landing-hero">
@@ -315,30 +321,11 @@ function appHtml(snapshot: any, origin: string): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>БУНКЕР·9 — ${snapshot.state === 'lobby' ? 'лобби' : 'игра'}</title>
-<link rel="stylesheet" href="/style-next.css">
+<link rel="stylesheet" href="/style.css">
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
 ${renderApp(snapshot, origin)}
 <script>
-// Enter в чате = клик по кнопке: data-on:submit в Datastar ненадёжен,
-// а кнопка работает проверенно.
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  const input = e.target;
-  if (input && input.id === 'chatInput') {
-    e.preventDefault();
-    document.getElementById('chatSend')?.click();
-  }
-});
-// тикающий таймер фазы: сервер присылает только время окончания
-setInterval(() => {
-  const el = document.querySelector('[data-ends-at]');
-  if (!el) return;
-  const left = Number(el.dataset.endsAt) - Date.now();
-  const secs = Math.max(0, Math.round(left / 1000));
-  el.textContent = secs + 'с';
-  el.classList.toggle('urgent', secs <= 10);
-}, 250);
 // лента и модалки живут вне патчей, но ошибки сервера надо уметь гасить
 document.addEventListener('click', (e) => {
   const t = e.target;
@@ -404,7 +391,7 @@ Bun.serve({
     }
 
     // статика
-    const assetPath = url.pathname === '/' ? '/index.html' : url.pathname;
+    const assetPath = url.pathname;
     if (assetPath.startsWith('/vendor/')) {
       const file = Bun.file(PUBLIC + assetPath.slice(1));
       if (await file.exists()) return new Response(file);
@@ -423,7 +410,7 @@ Bun.serve({
       });
     }
 
-    for (const name of ['/style.css', '/style-next.css', '/favicon.ico']) {
+    for (const name of ['/style.css', '/favicon.ico']) {
       if (url.pathname === name) {
         const file = Bun.file(PUBLIC + name.slice(1));
         if (await file.exists()) return new Response(file);

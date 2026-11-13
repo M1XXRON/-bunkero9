@@ -1,36 +1,13 @@
 {
   "name": "bunker-9",
-  "version": "1.0.0",
-  "description": "BUNKER·9 — browser social deduction game for 5–15 players",
-  "main": "server.js",
-  "directories": {
-    "test": "test"
-  },
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node test/sim.js",
-    "test:15": "BOTS=15 node test/sim.js"
-  },
-  "keywords": [
-    "game",
-    "mafia",
-    "bunker",
-    "socket.io",
-    "social-deduction"
-  ],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "version": "2.0.0",
+  "description": "BUNKER·9 — social deduction game for 5–15 players (Bun + Datastar)",
   "private": true,
-  "dependencies": {
-    "express": "^5.3.0",
-    "socket.io": "^4.8.4"
+  "scripts": {
+    "start": "bun run server.ts",
+    "dev": "bun --watch run server.ts",
+    "test": "node test/sim-bun.mjs",
+    "test:15": "BOTS=15 node test/sim-bun.mjs"
   },
-  "devDependencies": {
-    "socket.io-client": "^4.8.4"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "dependencies": {}
 }

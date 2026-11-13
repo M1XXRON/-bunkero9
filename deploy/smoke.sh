@@ -30,8 +30,9 @@ case "$health" in
 *) bad "health чужой: ${health:-пусто}" ;;
 esac
 
-qrid=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/qr.svg?text=$BASE%2F%23SMOKE")
-[ "$qrid" = "200" ] && ok "QR: 200" || bad "QR: $qrid"
+# QR из продукта убран (ветка bun-datastar) — проверяем, что работает новый стек
+css=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/style.css")
+[ "$css" = "200" ] && ok "стиль клиента (style.css): 200" || bad "style.css: $css"
 
 wcode=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "https://www.$DOMAIN/")
 [ "$wcode" = "301" ] && ok "www: 301" || bad "www: $wcode (ожидался 301)"

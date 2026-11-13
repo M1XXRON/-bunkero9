@@ -14,7 +14,7 @@ say() { printf '\n· %s\n' "$1"; }
 say "пакеты"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates gnupg rsync ufw >/dev/null
+apt-get install -y -qq curl ca-certificates gnupg rsync ufw unzip >/dev/null
 
 say "bun"
 if ! command -v bun >/dev/null 2>&1 || [ ! -x /usr/local/bin/bun ]; then

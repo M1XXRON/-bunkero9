@@ -1,7 +1,7 @@
 // Рендер состояния в HTML. Фрагменты патчатся в браузер через Datastar (SSE),
 // поэтому у каждого игрока свой HTML: роли и скрытые карты не утекают.
 //
-// Классы взяты из public/style.css — вёрстка переиспользуется как есть.
+// Классы и разметка — под public/style.css (единственный стиль нового клиента).
 
 export type Player = {
   id: string;
@@ -106,8 +106,13 @@ function avatar(player: { name: string; avatar: string; avatarIndex: number; con
 
 function topbar(snap: Snapshot): string {
   const tone = PHASE_TONE[snap.state] || 'day';
+  // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
   const timer = snap.phaseEndsAt
-    ? `<span class="phase-timer" data-ends-at="${snap.phaseEndsAt}">—:—</span>`
+    ? `<span class="phase-timer"
+         data-signals__ifmissing="{endsAt: ${snap.phaseEndsAt}, left: 0}"
+         data-on-interval__duration.250ms="$left = Math.max(0, Math.round(($endsAt - Date.now()) / 1000))"
+         data-class="{urgent: $left <= 10}"
+         data-text="$left + 'с'"></span>`
     : '';
   const res = snap.resources;
   const low = (value: number, limit: number) => (value <= limit ? ' low' : '');
@@ -445,11 +450,12 @@ function chatPanel(snap: Snapshot, activeTab = 'day'): string {
       <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Лобби</h2></div></header>
       <div id="chatTabs">${tabs}</div>
       <div class="chat-feed" id="chatFeed">${feedHtml(snap, activeTab)}</div>
-      <div class="chat-form">
-        <input id="chatInput" name="msg" autocomplete="off" placeholder="Сообщение в зал…" ${allowed.length ? '' : 'disabled'}>
-        <button id="chatSend" type="button" class="send-btn" ${allowed.length ? '' : 'disabled'}
-          data-on:click="@post('/act/chat', {payload: {text: document.getElementById('chatInput').value, channel: $tab || 'day'}, retry: 'never'}); document.getElementById('chatInput').value = ''">→</button>
-      </div>
+      <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
+        <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в зал…"
+          data-bind="msg" data-preserve-attr="value" ${allowed.length ? '' : 'disabled'}>
+        <input type="hidden" name="channel" data-attr:value="$tab || 'day'">
+        <button type="submit" class="send-btn" ${allowed.length ? '' : 'disabled'}>→</button>
+      </form>
     </section>`;
 }
 
@@ -466,7 +472,7 @@ function dossier(snap: Snapshot): string {
       </div>`)
     .join('');
   return `
-    <div class="modal-backdrop" data-show="$dossier" data-on:click.self="$dossier = false">
+    <div class="modal-backdrop" style="display: none" data-show="$dossier" data-on:click.self="$dossier = false">
       <div class="modal">
         <button class="modal-close" data-on:click="$dossier = false">×</button>
         <div class="modal-head">
@@ -503,7 +509,7 @@ function roleHint(role: string | null): string {
 
 function rules(): string {
   return `
-    <div class="modal-backdrop" data-show="$rules" data-on:click.self="$rules = false">
+    <div class="modal-backdrop" style="display: none" data-show="$rules" data-on:click.self="$rules = false">
       <div class="modal">
         <button class="modal-close" data-on:click="$rules = false">×</button>
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2>Как выжить</h2></div>
@@ -580,6 +586,24 @@ export function renderFeed(snap: Snapshot, activeTab: string): string {
     })
     .join('');
   return `<div id="chatFeed">${list}</div>`;
+}
+
+export function renderTitle(snap: Snapshot): string {
+  const parts = ['БУНКЕР·9'];
+  if (snap.state === 'lobby') parts.push('лобби');
+  else {
+    if (snap.day) parts.push(`день ${snap.day}`);
+    const label: Record<string, string> = {
+      intro: 'роли розданы',
+      reveal: 'раскрытие карт',
+      discussion: 'обсуждение',
+      vote: 'голосование',
+      night: 'ночь',
+      end: 'итог',
+    };
+    if (label[snap.state]) parts.push(label[snap.state]);
+  }
+  return `<title>${esc(parts.join(' · '))}</title>`;
 }
 
 export function renderError(text: string): string {
