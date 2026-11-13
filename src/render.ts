@@ -115,6 +115,13 @@ function avatar(
 
 // ---------- верхняя панель ----------
 
+const iconFood = () =>
+  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 2 2v8h2v-8a2 2 0 0 0 2-2V3h-2v6h-1V3h-2v6H7V3zM17 3c-1.5 1-2.5 3-2.5 5.5S15.5 12 17 12v9h2V3z"/></svg>`;
+const iconBolt = () =>
+  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+const iconCross = () =>
+  `<svg class="ic-inline" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.4" fill="none"/></svg>`;
+
 function topbar(snap: Snapshot): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
@@ -142,14 +149,20 @@ function topbar(snap: Snapshot): string {
       ${timer}
     </div>
     <div class="resources">
-      <span class="resource${low(res.food, snap.aliveCount)}">ЕДА <b>${res.food}</b></span>
-      <span class="resource${low(res.energy, 2)}">ЭНЕРГИЯ <b>${res.energy}</b></span>
-      <span class="resource${low(res.meds, 0)}">МЕДЫ <b>${res.meds}</b></span>
+      <span class="resource${low(res.food, snap.aliveCount)}">${iconFood()} <b>${res.food}</b></span>
+      <span class="resource${low(res.energy, 2)}">${iconBolt()} <b>${res.energy}</b></span>
+      <span class="resource${low(res.meds, 0)}">${iconCross()} <b>${res.meds}</b></span>
     </div>
     <div class="top-actions">
-      <button class="btn btn-secondary btn-small" data-on:click="$dossier = true">Досье</button>
-      <button class="btn btn-ghost btn-small" data-on:click="$rules = true">Правила</button>
-      <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Выйти">×</button>
+      <button class="btn btn-secondary btn-small" data-on:click="$dossier = true" title="Роль и карты">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M9 12h7M9 16h5M9 8h7"/></svg><span>Досье</span>
+      </button>
+      <button class="btn btn-ghost btn-small" data-on:click="$rules = true" title="Как играть">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg><span>Правила</span>
+      </button>
+      <button class="icon-btn" data-on:click="@post('/act/leave', {retry: 'never'})" title="Покинуть бункер">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M14 5h-8v14h8"/><path d="M11 12h9M16 8l4 4-4 4"/></svg>
+      </button>
     </div>
   </header>`;
 }
@@ -258,13 +271,13 @@ function eventCard(snap: Snapshot): string {
   if (!snap.event) return "";
   const parts = [
     snap.event.food
-      ? `<span class="${snap.event.food > 0 ? "up" : "down"}">ЕДА ${snap.event.food > 0 ? "+" : ""}${snap.event.food}</span>`
+      ? `<span class="${snap.event.food > 0 ? "up" : "down"}">${iconFood()} ${snap.event.food > 0 ? "+" : ""}${snap.event.food}</span>`
       : "",
     snap.event.energy
-      ? `<span class="${snap.event.energy > 0 ? "up" : "down"}">ЭНЕРГИЯ ${snap.event.energy > 0 ? "+" : ""}${snap.event.energy}</span>`
+      ? `<span class="${snap.event.energy > 0 ? "up" : "down"}">${iconBolt()} ${snap.event.energy > 0 ? "+" : ""}${snap.event.energy}</span>`
       : "",
     snap.event.meds
-      ? `<span class="${snap.event.meds > 0 ? "up" : "down"}">МЕДЫ ${snap.event.meds > 0 ? "+" : ""}${snap.event.meds}</span>`
+      ? `<span class="${snap.event.meds > 0 ? "up" : "down"}">${iconCross()} ${snap.event.meds > 0 ? "+" : ""}${snap.event.meds}</span>`
       : "",
   ]
     .filter(Boolean)
@@ -538,15 +551,21 @@ function dossier(snap: Snapshot): string {
           ${
             roleHidden && me.alive
               ? `<p class="note">За этой дверью — роль и пять личных карт.</p>
-               <div class="role-card"><span class="role-sigil">?</span><b>РОЛЬ СКРЫТА</b></div>
+               <div class="role-card role-locked">
+                 <span class="role-sigil">?</span>
+                 <b>РОЛЬ СКРЫТА</b>
+                 <span class="role-tap">Нажми «Показать роль» — при соседях не надо</span>
+               </div>
                <button class="btn btn-primary btn-wide" data-on:click="$reveal = true"
                  data-show="!$reveal">Показать роль</button>
-               <div data-show="$reveal" class="role-card role-open">
+               <div data-show="$reveal" class="role-card role-open tone-bg-${me.role}">
                  <b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
                  <p>${esc(roleHint(me.role))}</p>
                </div>`
-              : `<div class="role-card role-open"><b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
-                 <p>${esc(roleHint(me.role))}</p></div>`
+              : `<div class="role-card role-open tone-bg-${me.role}">
+                 <b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
+                 <p>${esc(roleHint(me.role))}</p>
+               </div>`
           }
         </div>
         <div class="modal-section">

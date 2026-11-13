@@ -321,6 +321,7 @@ function appHtml(snapshot: any, origin: string): string {
 <title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
 <link rel="stylesheet" href="/style.css?v=2">
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
+<script type="module" src="/sound.js"></script>
 </head><body class="game">
 ${renderApp(snapshot, origin)}
 <script>
@@ -480,7 +481,7 @@ Bun.serve({
       });
     }
 
-    for (const name of ["/style.css", "/favicon.ico"]) {
+    for (const name of ["/style.css", "/sound.js", "/favicon.ico"]) {
       if (url.pathname === name) {
         const file = Bun.file(`${PUBLIC}${name}`);
         if (await file.exists()) {
