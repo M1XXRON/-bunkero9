@@ -190,7 +190,7 @@ function lobby(snap: Snapshot, origin: string): string {
       : "ОТКРЫТЬ БУНКЕР";
 
   return `
-  <main class="lobby-main">
+  <div class="lobby-body">
     <section class="invite-card panel">
       <div class="invite-body">
         <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
@@ -219,7 +219,7 @@ function lobby(snap: Snapshot, origin: string): string {
           data-on:click="@post('/act/start', {retry: 'never'})">${startLabel}</button>
       </div>
     </section>
-  </main>`;
+  </div>`;
 }
 
 // ---------- игровой экран ----------

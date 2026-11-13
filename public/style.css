@@ -1242,3 +1242,12 @@ input:focus {
     height: 340px;
   }
 }
+
+/* Обёртка содержимого лобби: раньше здесь был вложенный .lobby-main,
+   из-за чего сетка ломалась и колонки разъезжались. */
+.lobby-body {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
