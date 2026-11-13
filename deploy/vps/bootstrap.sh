@@ -16,19 +16,9 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates gnupg rsync ufw unzip >/dev/null
 
-say "bun"
-if ! command -v bun >/dev/null 2>&1 || [ ! -x /usr/local/bin/bun ]; then
-	curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
-	BUN_INSTALL=/usr/local bash /tmp/bun-install.sh >/dev/null
-fi
-# bun — один статический бинарник: положим в /usr/local/bin, чтобы он был
-# доступен служебному пользователю bunker
-if [ -x /usr/local/bin/bun ]; then
-	echo "  bun $(/usr/local/bin/bun --version)"
-else
-	echo "  bun не установился" >&2
-	exit 1
-fi
+say "инструменты для деплоя"
+# Бинарник собирается на ноутбуке и rsync-ится на сервер, поэтому на VPS
+# bun не нужен — только caddy и firewall.
 
 say "caddy"
 if ! command -v caddy >/dev/null 2>&1; then

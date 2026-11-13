@@ -19,7 +19,9 @@ import {
 const engine = require("./src/engine.js");
 
 const PORT = Number(process.env.PORT || 3100);
-const PUBLIC = new URL("./public/", import.meta.url).pathname;
+// Путь к статике: в компилированном бинарнике import.meta.url указывает внутрь
+// исполняемого файла, поэтому берём каталог запуска (cwd), а не location бандла.
+const PUBLIC = process.env.PUBLIC_DIR ?? `${process.cwd()}/public`;
 const AVATARS = ["🦉", "🐺", "🦊", "🐻", "🦅", "🦌", "🐗", "🦎"];
 
 type Session = {
@@ -429,7 +431,7 @@ Bun.serve({
     // статика
     const assetPath = url.pathname;
     if (assetPath.startsWith("/vendor/")) {
-      const file = Bun.file(PUBLIC + assetPath.slice(1));
+      const file = Bun.file(`${PUBLIC}${assetPath}`);
       if (await file.exists()) return new Response(file);
     }
 
@@ -448,7 +450,7 @@ Bun.serve({
 
     for (const name of ["/style.css", "/favicon.ico"]) {
       if (url.pathname === name) {
-        const file = Bun.file(PUBLIC + name.slice(1));
+        const file = Bun.file(`${PUBLIC}${name}`);
         if (await file.exists()) return new Response(file);
       }
     }

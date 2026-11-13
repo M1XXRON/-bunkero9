@@ -1,7 +1,9 @@
+# Стиль форматтера
 [fmt]
-# Стиль проекта: 100 символов, двойные кавычки, точки с запятой.
-# Вендоренный Datastar и движок игры (src/engine.js, src/content.js) не трогаем —
-# путь к ним исключается в скрипте `fmt` (у [fmt] нет списка ignore).
 printWidth = 100
 semi = true
 singleQuote = false
+
+# bun не добавляет свой каталог в PATH для package.json-скриптов,
+# поэтому держим ссылку в node_modules/.bin — Bun prepend-ит её к PATH сам.
+# `bun install` её не пересоздаёт, так как bin-линки делаются только из пакетов.

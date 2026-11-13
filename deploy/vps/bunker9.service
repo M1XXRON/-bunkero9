@@ -1,5 +1,5 @@
 [Unit]
-Description=БУНКЕР·9 — веб-версия (Bun + Datastar)
+Description=БУНКЕР·9 — веб-версия (скомпилированный Bun-бинарник)
 Documentation=https://bunker9.lol
 After=network-online.target
 Wants=network-online.target
@@ -15,7 +15,7 @@ Environment=PORT=3100
 # Слушаем только локально: наружу выставляет Caddy с TLS.
 Environment=HOST=127.0.0.1
 
-ExecStart=/usr/local/bin/bun run server.ts
+ExecStart=/opt/bunker9/app/dist/bunker9
 Restart=always
 RestartSec=3
 SyslogIdentifier=bunker9

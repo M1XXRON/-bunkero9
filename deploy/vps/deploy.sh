@@ -20,8 +20,15 @@ echo "· сервер: $USER_AT"
 
 if [ "${SKIP_VERIFY:-0}" != "1" ]; then
 	echo "· проверки перед выкладкой (bun check + fmt + тесты)"
-	./scripts/bun.sh run verify || { echo "  проверки не прошли — деплой остановлен (SKIP_VERIFY=1 чтобы обойти)"; exit 1; }
+	~/.bun/bin/bun check --no-script || { echo "  типы не прошли — деплой остановлен"; exit 1; }
+	~/.bun/bin/bun fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md || { echo "  формат не прошёл — деплой остановлен"; exit 1; }
+	node test/sim-bun.mjs || { echo "  тесты не прошли — деплой остановлен"; exit 1; }
 fi
+
+echo ""
+echo "· компилирую бинарник (bun build --compile --bytecode)"
+~/.bun/bin/bun build ./server.ts --compile --bytecode --target=bun-linux-x64 --outfile dist/bunker9 >/dev/null
+file dist/bunker9 | sed 's/^/  /'
 
 echo ""
 echo "· проверяю ssh"
@@ -33,7 +40,10 @@ ssh "${SSH_OPTS[@]}" "$USER_AT" "echo '  ssh ok · ' \$(hostname)" || {
 
 echo ""
 echo "· готовлю каталоги"
-ssh "${SSH_OPTS[@]}" "$USER_AT" "mkdir -p $REMOTE_DIR/app $REMOTE_DIR/deploy"
+ssh "${SSH_OPTS[@]}" "$USER_AT" "mkdir -p $REMOTE_DIR/app/dist $REMOTE_DIR/deploy"
+
+echo "· копирую бинарник"
+rsync -az -e "ssh ${SSH_OPTS[*]}" dist/bunker9 "$USER_AT:$REMOTE_DIR/app/dist/bunker9"
 
 echo "· копирую код"
 rsync -az --delete \
@@ -51,7 +61,7 @@ ssh "${SSH_OPTS[@]}" "$USER_AT" "DOMAIN=$DOMAIN bash $REMOTE_DIR/deploy/bootstra
 
 echo ""
 echo "· права"
-ssh "${SSH_OPTS[@]}" "$USER_AT" "set -e; chown -R bunker:bunker $REMOTE_DIR"
+ssh "${SSH_OPTS[@]}" "$USER_AT" "set -e; chown -R bunker:bunker $REMOTE_DIR; chmod +x $REMOTE_DIR/app/dist/bunker9"
 
 echo ""
 echo "· перезапуск"
