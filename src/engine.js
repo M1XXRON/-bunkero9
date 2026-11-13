@@ -154,6 +154,7 @@ function pushMessage(room, message) {
   const full = {
     id: room.msgSeq,
     at: Date.now(),
+    day: room.day,
     channel: 'system',
     kind: 'system',
     tone: 'info',
@@ -1169,6 +1170,50 @@ function messagesFor(room, viewer) {
     .slice(-CHAT_LIMIT);
 }
 
+// Подсказки для обсуждения: не рандом, а факты дня — кто молчит, у кого
+// закрыто больше всех, кто уже выложил слишком много карт.
+function discussionHints(room, spokenToday) {
+  if (room.state !== 'discussion') return [];
+  const alive = alivePlayers(room);
+  if (!alive.length) return [];
+  const hints = [];
+
+  const silent = alive.filter((player) => !spokenToday.has(player.id));
+  if (silent.length) {
+    const names = silent.slice(0, 3).map((player) => player.name);
+    hints.push(
+      `Сегодня ещё не говорили: ${names.join(', ')}${silent.length > 3 ? ` и ещё ${silent.length - 3}` : ''}.`,
+    );
+  }
+
+  const closed = alive.filter((player) => player.traits.some((trait) => !trait.revealed));
+  if (closed.length) {
+    const player = closed[(room.day + room.gameId) % closed.length];
+    const trait = player.traits.find((item) => !item.revealed);
+    hints.push(`Спросите ${player.name}: что скрыто в категории «${trait.label}»?`);
+  }
+
+  // «больше всех» пишем только когда лидер действительно один: при равенстве
+  // подсказка врёт и путает.
+  const ranked = [...alive]
+    .map((player) => ({
+      player,
+      count: player.traits.filter((trait) => trait.revealed).length,
+    }))
+    .sort((a, b) => b.count - a.count);
+  if (ranked.length && ranked[0].count > 0 && ranked[0].count > (ranked[1]?.count ?? 0)) {
+    hints.push(
+      `У ${ranked[0].player.name} на столе больше всех карт (${ranked[0].count}) — версия должна быть стройнее.`,
+    );
+  }
+
+  if (room.resources.meds <= 1) {
+    hints.push('Медикаментов почти нет — врач теперь на вес золота.');
+  }
+
+  return hints.slice(0, 3);
+}
+
 function serializeFor(room, viewer) {
   const isEnd = room.state === 'end';
   const alive = alivePlayers(room);
@@ -1207,6 +1252,16 @@ function serializeFor(room, viewer) {
             .filter(Boolean),
         }
       : null;
+
+  // Кто сегодня уже говорил в зале — для блока подсказок на обсуждении.
+  const spokenToday = new Set(
+    room.messages
+      .filter(
+        (message) =>
+          message.kind === 'chat' && message.day === room.day && message.channel === 'day',
+      )
+      .map((message) => message.authorId),
+  );
 
   const players = room.players.map((player) => {
     const visibleRole = isEnd || player.roleRevealed;
@@ -1251,6 +1306,7 @@ function serializeFor(room, viewer) {
       }),
       traitsRevealed: revealedTraits.length,
       totalTraits: player.traits.length,
+      spokeToday: spokenToday.has(player.id),
       revealedThisRound: Boolean(player.revealedThisRound),
       votedFor: room.state === 'vote' && room.votes[player.id] ? room.votes[player.id] : null,
       votesAgainst: votesAgainst[player.id] || 0,
@@ -1327,6 +1383,7 @@ function serializeFor(room, viewer) {
   };
 
   return {
+    hints: discussionHints(room, spokenToday),
     code: room.code,
     state: room.state,
     day: room.day,

@@ -22,6 +22,7 @@ export type Player = {
   traits: { cat: string; label: string; value: string }[];
   traitSlots: { cat: string; label: string; revealed: boolean; value: string | null }[];
   traitsRevealed: number;
+  spokeToday: boolean;
   totalTraits: number;
   isBot?: boolean;
   revealedThisRound: boolean;
@@ -75,6 +76,7 @@ export type Snapshot = {
     text: string;
   }[];
   preview: { infected: number; doctor: number; humans: number };
+  hints: string[];
   turn: {
     playerId: string | null;
     name: string | null;
@@ -640,6 +642,68 @@ function endScene(snap: Snapshot): string {
     </div>`;
 }
 
+// Стол раскрытий: кто что уже показал. Основа обсуждения — видно, у кого
+// сколько карт на столе и какие именно.
+function revealBoard(snap: Snapshot): string {
+  const rows = snap.players
+    .filter((p) => p.alive)
+    .map((p) => {
+      const chips = (p.traitSlots || [])
+        .filter((slot) => slot.revealed)
+        .map(
+          (slot) =>
+            `<span class="rb-chip"><i>${esc(slot.label)}</i>${esc(slot.value || "")}</span>`,
+        )
+        .join("");
+      return `<div class="rb-card" data-peek>
+        <div class="peek-source" hidden aria-hidden="true">${peekCard(p)}</div>
+        <div class="rb-head">
+          ${avatar(p, "xs")}
+          <span class="rb-name">${esc(p.name)}</span>
+          <span class="rb-count">${p.traitsRevealed}/${p.totalTraits}</span>
+        </div>
+        <div class="rb-chips">${chips || '<span class="rb-empty">ничего не показал</span>'}</div>
+      </div>`;
+    })
+    .join("");
+  const total = snap.players.filter((p) => p.alive).length;
+  return `<div class="reveal-board">
+    <div class="rb-title">
+      <span class="eyebrow">СТОЛ РАСКРЫТИЙ</span>
+      <span class="seat-count">${total} выживших</span>
+    </div>
+    <div class="rb-grid">${rows}</div>
+  </div>`;
+}
+
+function hintList(snap: Snapshot): string {
+  const hints = snap.hints || [];
+  if (!hints.length) return "";
+  return `<div class="hints">
+    <span class="eyebrow">О ЧЁМ СПРОСИТЬ</span>
+    <ul class="hint-list">${hints
+      .map((h) => `<li class="hint"><span class="hint-dot"></span>${esc(h)}</li>`)
+      .join("")}</ul>
+  </div>`;
+}
+
+// Обсуждение. Два вида: сводка (по умолчанию) и старый текстовый — переключатель
+// в шапке панели, выбор живёт в сигнале $simple до перезагрузки.
+function discussionScene(snap: Snapshot): string {
+  return `<div class="action-block">
+    <div data-show="!$simple" class="discuss-rich">
+      ${revealBoard(snap)}
+      ${hintList(snap)}
+    </div>
+
+    <div data-show="$simple" class="discuss-plain">
+      <h3>Кому вы верите?</h3>
+      <p>Сопоставляйте карты, голоса и ночные потери. Голосование начнётся автоматически.</p>
+      <p class="note">Доверие — ресурс. Здесь его расходуют быстрее еды.</p>
+    </div>
+  </div>`;
+}
+
 function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
     intro: () => `<div class="action-block">
@@ -649,11 +713,7 @@ function scene(snap: Snapshot): string {
         <button class="btn btn-secondary" data-on:click="document.getElementById('dossier').showModal()">Открыть досье</button>
       </div>`,
     reveal: () => revealScene(snap),
-    discussion: () => `<div class="action-block">
-        <h3>Кому вы верите?</h3>
-        <p>Сопоставляйте карты, голоса и ночные потери. Голосование начнётся автоматически.</p>
-        <p class="note">Доверие — ресурс. Здесь его расходуют быстрее еды.</p>
-      </div>`,
+    discussion: () => discussionScene(snap),
     vote: () => voteScene(snap),
     night: () => nightScene(snap),
     end: () => endScene(snap),
@@ -671,6 +731,14 @@ function scene(snap: Snapshot): string {
     snap.me.isHost && snap.state !== "end"
       ? `<button class="chip skip-phase" data-on:click="@post('/act/skip', {retry: 'never'})">Пропустить фазу</button>`
       : "";
+  // На обсуждении два вида — переключатель живёт в шапке, чтобы не пропадал
+  // вместе со сводкой.
+  const viewToggle =
+    snap.state === "discussion"
+      ? `<button class="chip" data-on:click="$simple = !$simple"
+          data-text="$simple ? 'сводка' : 'простой вид'">простой вид</button>`
+      : "";
+  const headActions = `<div class="head-actions">${viewToggle}${host}</div>`;
   return `
     <section class="panel scene-panel">
       <header class="panel-head">
@@ -678,7 +746,7 @@ function scene(snap: Snapshot): string {
           <span class="eyebrow">${snap.day ? `ДЕНЬ ${snap.day}` : "ПАРТИЯ"}</span>
           <h2>${esc(titles[snap.state] || "Ход партии")}</h2>
         </div>
-        ${host}
+        ${headActions}
       </header>
       ${eventCard(snap)}
       ${body}
@@ -872,7 +940,7 @@ function rules(): string {
 // #board в партии — он же .game-grid (три колонки), в лобби — .lobby-main.
 
 export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
-  const signals = `{reveal: false, msg: ''}`;
+  const signals = `{reveal: false, msg: '', simple: false}`;
   // Оболочка одна на всё приложение: если менять её id при переходе
   // лобби -> игра, старые правила лобби продолжают применяться к игре.
   const stateClass = snap.state === "lobby" ? "state-lobby" : "state-game";

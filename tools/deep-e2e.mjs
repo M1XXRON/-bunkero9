@@ -298,6 +298,50 @@ async function main() {
   }
   note(sawReveal, "раскрытие: фаза достигнута");
 
+  // обсуждение: сводка раскрытий, подсказки и переключатель на старый вид
+  for (let i = 0; i < 4; i++) {
+    const now = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
+    if (now.includes("ОБСУЖДЕНИЕ")) break;
+    await evaluate(
+      '[...document.querySelectorAll("button")].find((b) => /Пропустить фазу/.test(b.textContent))?.click()',
+    );
+    await sleep(900);
+  }
+  if (
+    (await text('(document.querySelector(".phase-chip")||{}).textContent'))
+      .trim()
+      .includes("ОБСУЖДЕНИЕ")
+  ) {
+    const board = await evaluate("document.querySelectorAll('.rb-card').length");
+    note(board >= 5, `обсуждение: стол раскрытий (${board} карточек)`);
+    const chips = await evaluate("document.querySelectorAll('.rb-chip').length");
+    note(chips > 0, `обсуждение: на столе есть раскрытые карты (${chips})`);
+    const hints = await evaluate("document.querySelectorAll('.hint').length");
+    note(hints > 0, `обсуждение: подсказки (${hints})`);
+    const toggle = await evaluate(
+      '(() => { const b = [...document.querySelectorAll(".head-actions button")].find((x) => /простой вид|сводка/i.test(x.textContent)); if (!b) return false; b.click(); return true; })()',
+    );
+    note(toggle, "обсуждение: есть переключатель вида");
+    if (toggle) {
+      await sleep(400);
+      const plain = await evaluate(
+        "(() => { const e = document.querySelector('.discuss-plain'); return e ? e.offsetParent !== null : false; })()",
+      );
+      const rich = await evaluate(
+        "(() => { const e = document.querySelector('.discuss-rich'); return e ? e.offsetParent === null : false; })()",
+      );
+      note(plain && rich, "обсуждение: старый вид открывается по кнопке");
+      await evaluate(
+        '[...document.querySelectorAll(".head-actions button")].find((x) => /простой вид|сводка/i.test(x.textContent))?.click()',
+      );
+      await sleep(300);
+      const back = await evaluate(
+        "(() => { const e = document.querySelector('.discuss-rich'); return e ? e.offsetParent !== null : false; })()",
+      );
+      note(back, "обсуждение: сводка возвращается");
+    }
+  }
+
   // голосование
   let voted = false;
   for (let step = 0; step < 10; step++) {
