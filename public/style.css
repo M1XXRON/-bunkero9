@@ -951,6 +951,10 @@ input:focus {
 .mini-badge.mafia {
   color: var(--red);
 }
+.mini-badge.bot {
+  color: var(--muted);
+  border-bottom: 1px dashed currentColor;
+}
 
 /* ---------- лобби ---------- */
 
@@ -1078,7 +1082,47 @@ input:focus {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   margin-top: 14px;
+}
+
+/* на узком экране чипы и кнопка старта расходятся по строкам аккуратно */
+@media (max-width: 560px) {
+  .lobby-start {
+    gap: 8px;
+  }
+  .lobby-start .btn-wide {
+    margin-left: 0;
+    width: 100%;
+    max-width: none;
+    order: 3;
+  }
+  .bot-row {
+    order: 2;
+    width: 100%;
+  }
+  .pace-switch {
+    order: 1;
+  }
+}
+
+/* кнопки «добавить ботов» в лобби: тише основной кнопки старта */
+.bot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bot-row-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bot-chip {
+  font-size: 10px;
+  padding: 4px 8px;
 }
 
 .pace-switch {

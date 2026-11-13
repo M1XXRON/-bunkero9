@@ -170,6 +170,166 @@ function sessionTab(session: Session): string {
         : "day";
 }
 
+// ---------- боты ----------
+//
+// Бот — обычный игрок из engine.joinRoom с фейковым socketId и флагом isBot:
+// правил движка не касаемся, SSE-ленты у бота нет, broadcast его молча
+// пропускает. Всё поведение — здесь, поверх публичного API движка.
+
+const BOT_NAMES = [
+  "Дозорный",
+  "Механик",
+  "Санитар",
+  "Радист",
+  "Повар",
+  "Электрик",
+  "Биолог",
+  "Связист",
+  "Штурман",
+  "Металлург",
+  "Химик",
+  "Агроном",
+  "Психолог",
+  "Слесарь",
+  "Навигатор",
+];
+
+const BOT_LINES = [
+  "Я тут никого не знаю. И это взаимно.",
+  "Профессия у меня мирная, но руки могу и приложить.",
+  "Считаю по картам: двое врут.",
+  "Меня больше беспокоит вентиляция, чем люди.",
+  "Голосую по интуиции. Пока не подводила.",
+  "Кто-то из нас не тот, за кого себя выдаёт.",
+  "У меня с собой был фонарь и три пачки сигарет.",
+  "Предлагаю не паниковать и смотреть на руки.",
+  "Ночь покажет, кто действительно спал.",
+  "Мне не нравится, как вы молчите.",
+];
+
+const pick = (list: any[]): any => list[Math.floor(Math.random() * list.length)];
+
+// Ускоренные таймеры (BUNKER_TEST=1) идут по 0.7–0.9 с — боты должны успевать.
+const botDelay = () => (process.env.BUNKER_TEST === "1" ? 120 : 1200);
+
+function addBots(room: any, count: number): number {
+  if (room.state !== "lobby") return 0;
+  const usedNames = new Set(room.players.map((p: any) => p.name.toLowerCase()));
+  const usedAvatars = new Set(room.players.map((p: any) => p.avatar));
+  let added = 0;
+  for (let i = 0; i < count; i += 1) {
+    if (room.players.length >= room.maxPlayers) break;
+    const name =
+      BOT_NAMES.find((n) => !usedNames.has(n.toLowerCase())) ?? `Бот-${room.players.length + 1}`;
+    if (usedNames.has(name.toLowerCase())) break;
+    const avatar = AVATARS.find((a) => !usedAvatars.has(a)) ?? AVATARS[i % AVATARS.length];
+    const result = engine.joinRoom({
+      code: room.code,
+      name,
+      avatar,
+      socketId: `bot-${crypto.randomUUID()}`,
+    });
+    if (!result?.ok) break;
+    // метка живёт в снимке комнаты (SQLite), так что переживает рестарт
+    result.player.isBot = true;
+    result.player.token = null;
+    result.player.connected = true;
+    usedNames.add(name.toLowerCase());
+    usedAvatars.add(avatar);
+    added += 1;
+  }
+  return added;
+}
+
+// Боты действуют раз в фазу: защита от повторного запуска на каждый патч.
+const botPhase = new Map<string, string>();
+
+function botTurn(room: any, bot: any): void {
+  const current = engine.rooms.get(room.code);
+  if (current !== room) return; // комната уже заменена/убрана
+  const me = room.players.find((p: any) => p.id === bot.id);
+  if (!me || !me.alive || me.left) return;
+
+  if (room.state === "discussion" && room.day > (me.lastChatDay || 0)) {
+    // один короткий реплика в день — оживляет ленту, но не спамит
+    me.lastChatDay = room.day;
+    if (Math.random() > 0.35) engine.sendChat(room.code, me.id, "day", pick(BOT_LINES));
+    return;
+  }
+
+  if (room.state === "reveal" && !me.revealedThisRound) {
+    const index = me.traits.findIndex((t: any) => !t.revealed);
+    if (index >= 0) engine.revealTrait(room.code, me.id, index);
+    return;
+  }
+
+  if (room.state === "vote" && !room.votes?.[me.id]) {
+    const targets = room.players.filter((p: any) => p.alive && p.id !== me.id);
+    if (targets.length) engine.castVote(room.code, me.id, pick(targets).id);
+    return;
+  }
+
+  if (room.state === "night" && room.night) {
+    if (me.role === "infected" && !room.night.mafiaVotes?.[me.id]) {
+      const targets = room.players.filter((p: any) => p.alive && p.role !== "infected");
+      const all = targets.length
+        ? targets
+        : room.players.filter((p: any) => p.alive && p.id !== me.id);
+      if (all.length) engine.nightAction(room.code, me.id, pick(all).id);
+      return;
+    }
+    if (me.role === "doctor" && !room.night.doctorTarget && !room.night.doctorSkip) {
+      const targets = room.players.filter((p: any) => p.alive);
+      if (targets.length && Math.random() > 0.35)
+        engine.nightAction(room.code, me.id, pick(targets).id);
+      else engine.doctorSkip(room.code, me.id);
+    }
+  }
+}
+
+function driveBots(room: any): void {
+  const bots = room.players.filter((p: any) => p.isBot);
+  if (!bots.length) return;
+
+  // Хостом не может быть бот: игра встанет без человека (никто не начнёт партию
+  // и не пропустит фазу). Если хост ушёл — передаём первому живому человеку.
+  const host = room.players.find((p: any) => p.id === room.hostId);
+  if (host?.isBot) {
+    const human = room.players.find((p: any) => !p.isBot && !p.left);
+    if (human) {
+      room.hostId = human.id;
+      saveRoom(room);
+      broadcast(room, currentOrigin);
+    }
+  }
+
+  // Людей не осталось — боты доиграют сами с собой вечно. Комнату убираем.
+  if (!room.players.some((p: any) => !p.isBot && !p.left)) {
+    botPhase.delete(room.code);
+    clearTimeout(room.timer);
+    engine.rooms.delete(room.code);
+    return;
+  }
+
+  const key = `${room.gameId}:${room.state}:${room.day}`;
+  if (botPhase.get(room.code) === key) return;
+  botPhase.set(room.code, key);
+
+  const alive = bots.filter((p: any) => p.alive && !p.left);
+  alive.forEach((bot: any, i: number) => {
+    setTimeout(
+      () => {
+        try {
+          botTurn(room, bot);
+        } catch {
+          /* бот не должен ронять сервер */
+        }
+      },
+      botDelay() + i * (process.env.BUNKER_TEST === "1" ? 40 : 500),
+    ).unref?.();
+  });
+}
+
 // ---------- широковещание ----------
 
 // Keepalive: Cloudflare (и любой прокси) закрывает простаивающий ответ примерно
@@ -232,6 +392,8 @@ engine.setChangeHandler((room: any) => {
     saveGame(room);
   }
   broadcast(room, currentOrigin);
+  // боты ходят вслед за фазой (у них нет своей ленты — им нужен внешний толчок)
+  driveBots(room);
 });
 
 let currentOrigin = "";
@@ -408,6 +570,17 @@ async function handleAction(
       const result = engine.skipPhase(session.room, playerId);
       return result?.ok === false ? fail(session, result.error) : done();
     }
+    case "bots": {
+      if (!room) return fail(session, "Бункер не найден.");
+      if (room.hostId !== playerId) return fail(session, "Ботов добавляет хост.");
+      if (room.state !== "lobby") return fail(session, "Ботов можно добавить только до старта.");
+      const count = Math.max(1, Math.min(15, Math.round(Number(payload.count) || 1)));
+      const added = addBots(room, count);
+      if (!added) return fail(session, "Мест больше нет.");
+      saveRoom(room);
+      broadcast(room, origin);
+      return done();
+    }
     case "kick": {
       const result = engine.kickPlayer(session.room, playerId, String(payload.target));
       return result?.ok === false ? fail(session, result.error) : done();
@@ -457,7 +630,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=4">
+<link rel="stylesheet" href="/style.css?v=5">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <main class="landing-main">
@@ -499,7 +672,7 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=4">
+<link rel="stylesheet" href="/style.css?v=5">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">

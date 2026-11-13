@@ -107,4 +107,13 @@ if (staleCode !== 0) {
   process.exit(1);
 }
 
-console.log("\n✓ verify: типы, формат, боты 5/15, HTTP-проверки, битая сессия — всё зелёное");
+// 5. боты: добавление хостом и самостоятельная игра
+const gameBots = await run(["tools/bots-e2e.mjs"]);
+if (gameBots !== 0) {
+  console.error("\n✗ боты: провал");
+  process.exit(1);
+}
+
+console.log(
+  "\n✓ verify: типы, формат, боты 5/15, HTTP-проверки, битая сессия, игровые боты — всё зелёное",
+);

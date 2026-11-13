@@ -1051,6 +1051,7 @@ function serializeFor(room, viewer) {
       avatar: player.avatar,
       avatarIndex: player.avatarIndex,
       connected: player.connected,
+      isBot: player.isBot === true,
       alive: player.alive,
       left: player.left,
       isHost: room.hostId === player.id,

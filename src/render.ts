@@ -19,6 +19,7 @@ export type Player = {
   traits: { cat: string; label: string; value: string }[];
   traitsRevealed: number;
   totalTraits: number;
+  isBot?: boolean;
   revealedThisRound: boolean;
   votedFor: string | null;
   votesAgainst: number;
@@ -182,9 +183,10 @@ function lobby(snap: Snapshot, origin: string): string {
         <div class="lobby-player-info">
           <div class="lobby-player-name">${esc(p.name)}
             ${p.isHost ? '<span class="mini-badge host">хост</span>' : ""}
+            ${p.isBot ? '<span class="mini-badge bot">бот</span>' : ""}
             ${p.id === snap.me.id ? '<span class="mini-badge me">вы</span>' : ""}
           </div>
-          <div class="lobby-player-meta">${p.connected ? "на связи" : "нет связи"}</div>
+          <div class="lobby-player-meta">${p.isBot ? "под управлением сервера" : p.connected ? "на связи" : "нет связи"}</div>
         </div>
         ${
           snap.me.isHost && p.id !== snap.me.id
@@ -232,10 +234,28 @@ function lobby(snap: Snapshot, origin: string): string {
           <button class="chip ${snap.settings.pace === "normal" ? "on" : ""}" data-on:click="@post('/act/pace', {payload: {pace: 'normal'}, retry: 'never'})">обычный</button>
           <button class="chip ${snap.settings.pace === "fast" ? "on" : ""}" data-on:click="@post('/act/pace', {payload: {pace: 'fast'}, retry: 'never'})">быстрый</button>
         </div>
+        ${botControls(snap)}
         <button class="btn btn-primary btn-wide" ${canStart ? "" : "disabled"}
           data-on:click="@post('/act/start', {retry: 'never'})">${startLabel}</button>
       </div>
     </section>
+  </div>`;
+}
+
+// Боты: хост добивает состав, когда друзей не хватает (или для проверки партии
+// в одиночку). Кнопки есть только у хоста в лобби и только пока есть места.
+function botControls(snap: Snapshot): string {
+  if (!snap.me.isHost) return "";
+  const free = snap.maxPlayers - snap.players.length;
+  if (free <= 0) return "";
+  const add = (count: number, label: string) =>
+    `<button class="chip bot-chip" data-on:click="@post('/act/bots', {payload: {count: ${count}}, retry: 'never'})">${label}</button>`;
+  return `<div class="bot-row">
+    <span class="bot-row-label">боты</span>
+    ${add(1, "+1")}
+    ${add(5, "+5")}
+    ${free >= 10 ? add(10, "+10") : ""}
+    ${free > 1 ? add(free, `заполнить (+${free})`) : ""}
   </div>`;
 }
 
