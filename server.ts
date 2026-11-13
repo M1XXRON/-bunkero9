@@ -246,7 +246,7 @@ const botPhase = new Map<string, string>();
 
 function botTurn(room: any, bot: any): void {
   const current = engine.rooms.get(room.code);
-  if (current !== room) return; // комната уже заменена/убрана
+  if (current !== room) return; // комната уже заменена/убрана // комната уже заменена/убрана
   const me = room.players.find((p: any) => p.id === bot.id);
   if (!me || !me.alive || me.left) return;
 
