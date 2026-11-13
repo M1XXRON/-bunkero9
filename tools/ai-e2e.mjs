@@ -72,6 +72,10 @@ try {
   const personas = (roster.match(/ИИ-профессия \d+/g) || []).length;
   note(personas >= 1, `персонажи пришли от модели (${personas} карт)`);
 
+  // сюжет партии: пришёл от модели и виден в интро
+  const intro = await page(H);
+  note(/ИИ-СЮЖЕТ/.test(intro), "сюжет партии сгенерирован моделью");
+
   // обсуждение: подсказки должны прийти от модели (mock-маркер)
   let aiHints = false;
   for (let i = 0; i < 30; i += 1) {

@@ -39,6 +39,7 @@ import {
   generateHints,
   generatePersonas,
   generateRecap,
+  generateStory,
 } from "./src/ai.ts";
 
 const PORT = Number(process.env.PORT || 3100);
@@ -434,6 +435,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function aiLog(room: any): string {
   const lines = [`Партия в бункере ${room.code}, спасение на ${room.rescueDay}-й день.`];
+  if (room.story) lines.push(`Сюжет: ${room.story.title} — ${room.story.premise}`);
   for (const player of room.players) {
     const fate = player.alive ? "выжил" : player.left ? "ушёл" : "выбыл";
     lines.push(
@@ -581,6 +583,21 @@ async function aiEpitaph(room: any): Promise<void> {
   }
 }
 
+async function aiStory(room: any): Promise<void> {
+  const key = `${room.code}:story`;
+  if (aiBusy.has(key)) return;
+  aiBusy.add(key);
+  try {
+    const story = await generateStory();
+    if (engine.rooms.get(room.code) !== room) return;
+    if (room.state !== "lobby") return;
+    room.story = story ? { ...story, source: "ai" } : room.story;
+    saveRoom(room);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
 async function aiNextEvent(room: any): Promise<void> {
   const key = `${room.code}:event`;
   if (aiBusy.has(key)) return;
@@ -593,7 +610,10 @@ async function aiNextEvent(room: any): Promise<void> {
       `энергия ${room.resources.energy}`,
       `медикаменты ${room.resources.meds}`,
       `спасение через ${Math.max(1, (room.rescueDay || room.day) - room.day)} дн.`,
-    ].join(", ");
+      room.story?.title ? `катастрофа: ${room.story.title} — ${room.story.threat || ""}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
     const event = await generateEvent(context);
     if (engine.rooms.get(room.code) !== room) return;
     if (room.state !== "night") return;
@@ -627,6 +647,8 @@ function scheduleAi(room: any): void {
   // подсказки на обсуждении — один вызов на день
   if (room.state === "discussion" && (!room.aiHints || room.aiHints.day !== room.day))
     void aiHints(room);
+  // Сюжет (катастрофа) генерируем сразу, как только появилась комната.
+  if (room.state === "lobby" && !room.story) void aiStory(room);
   // Пока хост собирает состав — готовим персонажей, чтобы старт не ждал модель.
   if (room.state === "lobby" && room.players.length >= engine.MIN_PLAYERS) {
     const ready = room.personas && room.personas.forCount === room.players.length;
@@ -799,7 +821,10 @@ async function handleAction(
         }
       }
       // исключение из общего правила: startGame принимает объект комнаты
-      const result = engine.startGame(room, playerId, { personas: personas || undefined });
+      const result = engine.startGame(room, playerId, {
+        personas: personas || undefined,
+        story: room.story && room.story.source === "ai" ? room.story : undefined,
+      });
       return result?.ok === false ? fail(session, result.error) : done();
     }
     case "pace": {

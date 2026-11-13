@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { AVATARS, TRAITS, EVENTS, ENDINGS } = require('./content');
+const { AVATARS, TRAITS, EVENTS, ENDINGS, SCENARIOS } = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -739,6 +739,16 @@ function startGame(room, playerId, options = {}) {
   room.turn = null;
 
   const total = room.players.length;
+  // Сюжет: модель присылает свой, иначе берём сценарий из content.js.
+  room.story =
+    options.story && options.story.title
+      ? {
+          title: String(options.story.title).slice(0, 40),
+          premise: String(options.story.premise || '').slice(0, 280),
+          threat: String(options.story.threat || '').slice(0, 80),
+          source: 'ai',
+        }
+      : { ...pick(SCENARIOS), source: 'static' };
   room.rescueDay = rescueDayFor(total);
   room.crewMin = crewMinFor(total);
   room.resources = startResources(total);
@@ -768,11 +778,9 @@ function startGame(room, playerId, options = {}) {
   });
 
   system(room, 'СИГНАЛ ТИШИНЫ', 'title');
-  system(
-    room,
-    'Дверь заперта. Снаружи — только тишина. Внутри — люди, ресурсы и теснота. Мест меньше, чем желающих.',
-    'info',
-  );
+  system(room, room.story.title, 'title');
+  system(room, room.story.premise, 'info');
+  if (room.story.threat) system(room, `Что настораживает: ${room.story.threat}.`, 'warn');
   system(
     room,
     `Смена: ${total} человек. Спасение — через ${room.rescueDay} дней. Бункер выдержит, только если в нём останется хотя бы ${room.crewMin}.`,
@@ -1353,6 +1361,7 @@ function serializeFor(room, viewer) {
     settings: { ...room.settings },
     resources: { ...room.resources },
     event: room.event,
+    story: room.story || null,
     crewMin: room.crewMin || crewMinFor(room.players.length),
     rescueDay: room.rescueDay || null,
     daysLeft: room.rescueDay ? Math.max(0, room.rescueDay - room.day) : null,

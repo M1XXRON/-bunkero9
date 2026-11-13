@@ -156,6 +156,30 @@ export async function generateRecap(log: string): Promise<Recap | null> {
   return { title, paragraphs, verdict };
 }
 
+// ---------- 6. Сюжет партии ----------
+
+const STORY_SYSTEM = `Ты — сценарист постапокалиптической игры «Бункер».
+Придумай катастрофу и «правду о бункере» для одной партии.
+Верни строго JSON: {"title":"...","premise":"...","threat":"..."}
+Правила: title — 2–3 слова капсом без точки; premise — 2 предложения (75–110 слов
+не нужно, 160–220 знаков), что произошло и почему они заперты; threat — короткая
+деталь-угроза до 60 знаков, которая будет звучать в событиях.
+Конкретика быта: вентиляция, вода, генератор, склад, радио, соседние отсеки.
+Без ролей, без «заражённых», без имён игроков. Язык — русский.`;
+
+export async function generateStory(): Promise<{
+  title: string;
+  premise: string;
+  threat: string;
+} | null> {
+  const data = await chatJson(STORY_SYSTEM, "Придумай новую партию.", 400);
+  const title = clean(data?.title, 40);
+  const premise = clean(data?.premise, 260);
+  const threat = clean(data?.threat, 80);
+  if (!title || !premise) return null;
+  return { title, premise, threat };
+}
+
 // ---------- 4. Подсказки на обсуждении ----------
 
 const HINTS_SYSTEM = `Ты — ведущий игры «Бункер». По публичной картине дня придумай 2–3 наводки
@@ -213,6 +237,13 @@ function mockAnswer(system: string, user: string): Json {
           `ИИ-привычка ${i + 1}`,
         ],
       })),
+    };
+  }
+  if (system.includes("сценарист")) {
+    return {
+      title: `ИИ-СЮЖЕТ ${mockSeq}`,
+      premise: "Тестовая катастрофа: наверху всё ещё плохо, а внизу уже тесно.",
+      threat: "в вентиляции слышно чужое дыхание",
     };
   }
   if (system.includes("наводки")) {

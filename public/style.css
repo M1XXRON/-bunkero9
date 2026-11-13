@@ -2812,3 +2812,28 @@ body.landing {
     background-position: -200% 0;
   }
 }
+
+/* ---------- сюжет партии ---------- */
+
+.story-threat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 14px 0 4px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--warn);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: rgba(240, 179, 87, 0.06);
+  color: #e8d3a8;
+  font-size: 13.5px;
+}
+
+.story-threat span {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--warn);
+  white-space: nowrap;
+}

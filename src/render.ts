@@ -67,6 +67,7 @@ export type Snapshot = {
     text: string;
   }[];
   hints: string[];
+  story: { title: string; premise: string; threat?: string; source?: string } | null;
   recap: { title: string; paragraphs: string[]; verdict: string } | null;
   recapPending: boolean;
   crewMin: number;
@@ -583,7 +584,7 @@ function endScene(snap: Snapshot): string {
     })
     .join("");
   return `<div class="action-block">
-      <span class="eyebrow">ПРОТОКОЛ ЗАВЕРШЁН</span>
+      <span class="eyebrow">ПРОТОКОЛ ЗАВЕРШЁН${snap.story?.title ? ` · ${esc(snap.story.title)}` : ""}</span>
       <h3>${esc(tag)}</h3>
       <h4>${esc(ending?.title || "")}</h4>
       <p>${esc(ending?.text || "")}</p>
@@ -679,8 +680,14 @@ function discussionScene(snap: Snapshot): string {
 function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
     intro: () => `<div class="action-block">
-        <h3>Добро пожаловать в «Кольцо-9»</h3>
-        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и слишком много людей на слишком мало мест.</p>
+        <span class="eyebrow">КАТАСТРОФА</span>
+        <h3>${esc(snap.story?.title || "Смена собрана")}</h3>
+        <p>${esc(snap.story?.premise || "Семнадцать дней назад мир замолчал.")}</p>
+        ${
+          snap.story?.threat
+            ? `<div class="story-threat"><span>ЧТО НАСТОРАЖИВАЕТ</span>${esc(snap.story.threat)}</div>`
+            : ""
+        }
         <p class="note">Смена собрана. Спасение через ${snap.rescueDay ?? "?"} дней — до тех пор нужно держать ресурсы и людей.</p>
       </div>`,
     reveal: () => revealScene(snap),
