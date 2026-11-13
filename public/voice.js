@@ -1,39 +1,60 @@
-// Голос: браузерный speechSynthesis — без ключей, запросов и задержек.
-// Читает смену фаз, изгнания/потери и финал. Включается кнопкой в шапке,
-// выбор живёт в localStorage. Не мешает sound.js: там эффекты, здесь речь.
-const STORAGE = "bunker9-voice";
-let enabled = localStorage.getItem(STORAGE) === "1";
-let voice = null;
+// Голос: браузерный speechSynthesis. Голос и манера выбираются в меню кнопки,
+// выбор живёт в localStorage. На каждом устройстве свои голоса (macOS, Android,
+// iOS говорят разными голосами) — это нормально для браузерного синтеза.
+const KEY = "bunker9-voice-cfg";
+const DEFAULTS = { on: false, voiceURI: "", mode: "calm" };
+const MODES = {
+  calm: { rate: 1.02, pitch: 0.92, label: "Спокойно" },
+  radio: { rate: 0.88, pitch: 0.7, label: "Диктор" },
+  fast: { rate: 1.25, pitch: 1.0, label: "Быстро" },
+};
 
 const synth = window.speechSynthesis;
 
-function pickVoice() {
-  if (!synth) return null;
-  const voices = synth.getVoices();
-  if (!voices.length) return null;
-  const ru = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("ru"));
-  return ru.find((v) => /milena|alena|irina|yuri|pavel/i.test(v.name)) || ru[0] || null;
+const load = () => {
+  try {
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+  } catch {
+    return { ...DEFAULTS };
+  }
+};
+const save = (cfg) => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(cfg));
+  } catch {
+    /* приватный режим — живём без сохранения */
+  }
+};
+
+let cfg = load();
+let menu = null;
+
+function voices() {
+  if (!synth) return [];
+  const all = synth.getVoices();
+  const ru = all.filter((v) => (v.lang || "").toLowerCase().startsWith("ru"));
+  return (ru.length ? ru : all).slice(0, 8);
 }
 
-if (synth) {
-  pickVoice();
-  synth.addEventListener?.("voiceschanged", () => {
-    voice = pickVoice();
-  });
+function currentVoice() {
+  const list = voices();
+  return list.find((v) => v.voiceURI === cfg.voiceURI) || list[0] || null;
 }
 
 function speak(text, { interrupt = false } = {}) {
-  if (!enabled || !synth || !text) return;
+  if (!cfg.on || !synth || !text) return;
   const phrase = String(text).replace(/\s+/g, " ").trim().slice(0, 240);
   if (!phrase) return;
+  const mode = MODES[cfg.mode] || MODES.calm;
   try {
     if (interrupt) synth.cancel();
     const utter = new SpeechSynthesisUtterance(phrase);
     utter.lang = "ru-RU";
+    const voice = currentVoice();
     if (voice) utter.voice = voice;
-    utter.rate = 1.02;
-    utter.pitch = 0.92;
-    utter.volume = 0.9;
+    utter.rate = mode.rate;
+    utter.pitch = mode.pitch;
+    utter.volume = 0.92;
     synth.speak(utter);
   } catch {
     /* синтез недоступен — молчим */
@@ -46,27 +67,121 @@ function icon(on) {
     : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 10l5 4M21 10l-5 4"/></svg>`;
 }
 
+function renderMenu() {
+  if (!menu) return;
+  const list = voices();
+  const rows = list.length
+    ? list
+        .map(
+          (v, i) =>
+            `<button class="vm-item ${currentVoice()?.voiceURI === v.voiceURI ? "on" : ""}" data-voice="${i}">
+              ${v.name} <span>${v.lang || ""}</span>
+            </button>`,
+        )
+        .join("")
+    : `<div class="vm-empty">В этом браузере нет голосов</div>`;
+  menu.innerHTML = `
+    <button class="vm-toggle ${cfg.on ? "on" : ""}" data-toggle>${cfg.on ? "Голос включён" : "Голос выключен"}</button>
+    <div class="vm-title">Голос</div>
+    ${rows}
+    <div class="vm-title">Манера</div>
+    <div class="vm-modes">
+      ${Object.entries(MODES)
+        .map(
+          ([key, mode]) =>
+            `<button class="vm-item vm-mode ${cfg.mode === key ? "on" : ""}" data-mode="${key}">${mode.label}</button>`,
+        )
+        .join("")}
+    </div>`;
+}
+
+function closeMenu() {
+  if (!menu) return;
+  menu.hidden = true;
+  document.removeEventListener("click", onDocClick, true);
+}
+
+function onDocClick(event) {
+  if (menu && !menu.contains(event.target) && !event.target.closest(".voice-btn")) closeMenu();
+}
+
+function openMenu(btn) {
+  if (!menu) {
+    menu = document.createElement("div");
+    menu.className = "voice-menu";
+    document.body.appendChild(menu);
+  }
+  bindMenu();
+  renderMenu();
+  const rect = btn.getBoundingClientRect();
+  menu.hidden = false;
+  menu.style.top = `${Math.round(rect.bottom + 8)}px`;
+  menu.style.left = `${Math.round(Math.min(rect.left, window.innerWidth - 268))}px`;
+  setTimeout(() => document.addEventListener("click", onDocClick, true), 0);
+}
+
+function bindMenu() {
+  if (!menu || menu.dataset.bound) return;
+  menu.dataset.bound = "1";
+  menu.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-toggle]");
+    if (toggle) {
+      cfg.on = !cfg.on;
+      save(cfg);
+      refreshButton();
+      renderMenu();
+      if (cfg.on) speak("Голос включён");
+      else synth?.cancel();
+      return;
+    }
+    const modeBtn = event.target.closest("[data-mode]");
+    if (modeBtn) {
+      cfg.mode = modeBtn.dataset.mode;
+      save(cfg);
+      renderMenu();
+      if (cfg.on) speak("Так звучит выбранная манера");
+      return;
+    }
+    const voiceBtn = event.target.closest("[data-voice]");
+    if (voiceBtn) {
+      const voice = voices()[Number(voiceBtn.dataset.voice)];
+      if (voice) cfg.voiceURI = voice.voiceURI;
+      save(cfg);
+      renderMenu();
+      if (cfg.on) speak("Так звучит выбранный голос");
+    }
+  });
+}
+
+let button = null;
+
+function refreshButton() {
+  if (!button) return;
+  button.innerHTML = icon(cfg.on);
+  button.title = cfg.on ? "Голос включён — настроить" : "Голос выключен — настроить";
+  button.setAttribute("aria-pressed", cfg.on ? "true" : "false");
+}
+
 function mountButton() {
   const actions = document.querySelector(".top-actions");
-  if (!actions || actions.querySelector(".voice-btn")) return;
-  const btn = document.createElement("button");
-  btn.className = "icon-btn voice-btn";
-  btn.innerHTML = icon(enabled);
-  btn.title = enabled ? "Выключить голос" : "Включить голос";
-  btn.setAttribute("aria-pressed", enabled ? "true" : "false");
-  btn.addEventListener("click", () => {
-    enabled = !enabled;
-    localStorage.setItem(STORAGE, enabled ? "1" : "0");
-    btn.innerHTML = icon(enabled);
-    btn.title = enabled ? "Выключить голос" : "Включить голос";
-    btn.setAttribute("aria-pressed", enabled ? "true" : "false");
-    if (enabled) speak("Голос включён");
-    else synth?.cancel();
+  if (!actions) return;
+  if (actions.querySelector(".voice-btn")) {
+    button = actions.querySelector(".voice-btn");
+    return;
+  }
+  button = document.createElement("button");
+  button.className = "icon-btn voice-btn";
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (menu && !menu.hidden) closeMenu();
+    else openMenu(button);
   });
+  refreshButton();
   const sound = actions.querySelector(".sound-btn");
-  if (sound && sound.nextSibling) actions.insertBefore(btn, sound.nextSibling);
-  else if (sound) actions.appendChild(btn);
-  else actions.prepend(btn);
+  if (sound && sound.nextSibling) actions.insertBefore(button, sound.nextSibling);
+  else if (sound) actions.appendChild(button);
+  else actions.prepend(button);
+  bindMenu();
 }
 
 // ---------- что читаем ----------
@@ -84,12 +199,10 @@ function observe() {
       speak(text);
     }
   } else if (lastBanner) {
-    // баннер скрылся — следующий показ снова прочитаем
     lastBanner = "";
   }
 
-  const events = document.querySelectorAll(".chat-event.bad, .chat-event.warn");
-  for (const node of events) {
+  for (const node of document.querySelectorAll(".chat-event.bad, .chat-event.warn")) {
     const text = node.textContent.trim();
     if (!spokenEvents.has(text)) {
       if (spokenEvents.size > 120) spokenEvents.clear();
@@ -101,10 +214,7 @@ function observe() {
   const end = document.querySelector(".end-roster");
   if (end && !lastEnd) {
     lastEnd = true;
-    const title = document
-      .querySelector(".end-roster")
-      ?.closest(".action-block")
-      ?.querySelector("h3");
+    const title = end.closest(".action-block")?.querySelector("h3");
     if (title) speak(`Партия окончена. ${title.textContent.trim()}`, { interrupt: true });
   }
 }
@@ -119,4 +229,11 @@ new MutationObserver(() => {
   attributeFilter: ["class"],
 });
 
+if (synth)
+  synth.addEventListener?.("voiceschanged", () => {
+    if (menu && !menu.hidden) renderMenu();
+    refreshButton();
+  });
+
+window.addEventListener("resize", () => closeMenu());
 mountButton();

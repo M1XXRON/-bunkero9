@@ -160,6 +160,24 @@ async function main() {
     await evaluate("!!document.querySelector('.top-actions .voice-btn')"),
     "голос: кнопка в шапке",
   );
+  await evaluate("document.querySelector('.top-actions .voice-btn')?.click()");
+  await sleep(400);
+  const voiceMenu = await evaluate(
+    "(() => { const m = document.querySelector('.voice-menu'); return m ? !m.hidden : false; })()",
+  );
+  note(voiceMenu, "голос: меню выбора открывается");
+  if (voiceMenu) {
+    const modes = await evaluate("document.querySelectorAll('.voice-menu .vm-mode').length");
+    note(modes === 3, `голос: три манеры (${modes})`);
+    await evaluate("document.querySelector('.voice-menu [data-toggle]')?.click()");
+    await sleep(200);
+    const on = await evaluate(
+      "(() => { const b = document.querySelector('.voice-menu [data-toggle]'); return b ? /включ/i.test(b.textContent) : false; })()",
+    );
+    note(on, "голос: включается из меню");
+    await evaluate("document.querySelector('.top-actions .voice-btn')?.click()");
+    await sleep(200);
+  }
 
   // подсказка «кто что раскрыл»: наводим на строку второго игрока
   const hover = await evaluate(
