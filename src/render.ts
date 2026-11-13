@@ -67,6 +67,8 @@ export type Snapshot = {
     text: string;
   }[];
   hints: string[];
+  recap: { title: string; paragraphs: string[]; verdict: string } | null;
+  recapPending: boolean;
   crewMin: number;
   rescueDay: number | null;
   daysLeft: number | null;
@@ -586,12 +588,30 @@ function endScene(snap: Snapshot): string {
       <h4>${esc(ending?.title || "")}</h4>
       <p>${esc(ending?.text || "")}</p>
       <ul class="end-roster">${roster}</ul>
+      ${recapBlock(snap)}
       ${
         snap.me.isHost
           ? `<button class="btn btn-primary" data-on:click="@post('/act/rematch', {retry: 'never'})">Сыграть ещё</button>`
           : '<p class="note">Хост откроет новый бункер.</p>'
       }
     </div>`;
+}
+
+// Разбор партии: пока модель думает — скелетон, потом текст (или фолбэк сервера).
+function recapBlock(snap: Snapshot): string {
+  if (snap.recapPending)
+    return `<div class="recap pending">
+      <span class="eyebrow">РАЗБОР ПАРТИИ</span>
+      <div class="recap-skeleton"><i></i><i></i></div>
+    </div>`;
+  if (!snap.recap) return "";
+  const paragraphs = snap.recap.paragraphs.map((text) => `<p>${esc(text)}</p>`).join("");
+  return `<div class="recap">
+    <span class="eyebrow">РАЗБОР ПАРТИИ</span>
+    <h4>${esc(snap.recap.title)}</h4>
+    ${paragraphs}
+    ${snap.recap.verdict ? `<div class="recap-verdict">${esc(snap.recap.verdict)}</div>` : ""}
+  </div>`;
 }
 
 // Стол раскрытий: кто что уже показал. Основа обсуждения — видно, у кого

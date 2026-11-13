@@ -472,6 +472,19 @@ function autoReveal(room, player) {
 }
 
 function drawEvent(room) {
+  // Событие, заранее сгенерированное моделью (сервер кладёт его в room.nextEvent
+  // во время ночи). Числа приходят от ИИ, поэтому их режет scaleEffects ниже.
+  if (room.nextEvent) {
+    const ai = room.nextEvent;
+    room.nextEvent = null;
+    return {
+      id: `ai-${room.day}`,
+      title: String(ai.title || '').slice(0, 60),
+      text: String(ai.text || '').slice(0, 240),
+      effects: ai.effects || {},
+      source: 'ai',
+    };
+  }
   if (room.usedEvents.length >= EVENTS.length) room.usedEvents = [];
   const available = EVENTS.filter((event) => !room.usedEvents.includes(event.id));
   const event = pick(available);
@@ -679,7 +692,7 @@ function resolveNight(room) {
   beginDay(room);
 }
 
-function startGame(room, playerId) {
+function startGame(room, playerId, options = {}) {
   if (room.state !== 'lobby') return { ok: false, error: 'Игра уже идёт.' };
   if (room.hostId !== playerId) return { ok: false, error: 'Начать игру может только хост.' };
   if (room.players.length < MIN_PLAYERS) {
@@ -718,10 +731,16 @@ function startGame(room, playerId) {
     player.death = null;
     player.revealedThisRound = false;
     player.lastHealTarget = null;
-    player.traits = TRAITS.map((category) => ({
+    // Карты берём из пула, но если сервер принёс персонажей от модели —
+    // используем их значения (порядок категорий тот же, что в TRAITS).
+    const persona = Array.isArray(options.personas) ? options.personas[playerIndex] : null;
+    player.traits = TRAITS.map((category, index) => ({
       cat: category.key,
       label: category.label,
-      value: pools[category.key][playerIndex],
+      value:
+        persona && typeof persona.values?.[index] === 'string'
+          ? String(persona.values[index]).slice(0, 60)
+          : pools[category.key][playerIndex],
       revealed: false,
     }));
   });
@@ -1316,6 +1335,8 @@ function serializeFor(room, viewer) {
     turn,
     messages: messagesFor(room, viewer),
     winner: room.winner,
+    recap: room.recap || null,
+    recapPending: Boolean(room.recapPending),
     phaseEndsAt: room.phaseEndsAt,
     phaseStartedAt: room.phaseStartedAt,
     chat: availableChat,

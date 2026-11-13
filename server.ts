@@ -32,6 +32,8 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const engine = require("./src/engine.js");
 
+import { aiEnabled, generateEvent, generatePersonas, generateRecap } from "./src/ai.ts";
+
 const PORT = Number(process.env.PORT || 3100);
 // Путь к статике: в компилированном бинарнике import.meta.url указывает внутрь
 // исполняемого файла, поэтому берём каталог запуска (cwd), а не location бандла.
@@ -417,6 +419,109 @@ function broadcast(room: any, origin: string) {
   }
 }
 
+// ---------- ИИ: события и разбор (асинхронно, с фолбэком) ----------
+
+const aiBusy = new Set<string>();
+
+function aiLog(room: any): string {
+  const lines = [`Партия в бункере ${room.code}, спасение на ${room.rescueDay}-й день.`];
+  for (const player of room.players) {
+    const fate = player.alive ? "выжил" : player.left ? "ушёл" : "выбыл";
+    lines.push(
+      `${player.name}: ${fate}${player.death ? ` (день ${player.death.day}, ${player.death.cause})` : ""}.`,
+    );
+  }
+  for (const message of room.messages) {
+    if (message.kind === "chat") continue;
+    if (message.tone === "muted" || message.tone === "info") continue;
+    lines.push(`[день ${message.day}] ${message.text}`);
+  }
+  lines.push(
+    `Итог: ${room.winner === "survived" ? "спаслись" : "бункер погиб"}; ресурсы еда ${room.resources.food}, энергия ${room.resources.energy}, медикаменты ${room.resources.meds}.`,
+  );
+  return lines.join("\n").slice(0, 6000);
+}
+
+function fallbackRecap(room: any) {
+  const survived = room.winner === "survived";
+  const alive = room.players.filter((player: any) => player.alive).length;
+  const lost = room.players.length - alive;
+  const tooFew = alive > 0 && alive < room.crewMin;
+  const reason = survived
+    ? `Бункер продержался ${room.day} дн. и дождался спасения с ${alive} выжившими.`
+    : tooFew
+      ? `На ${room.day}-й день смена усохла до ${alive} человек при минимуме ${room.crewMin} — системы стало некому держать.`
+      : `На ${room.day}-й день в бункере не осталось никого: спасение не успело.`;
+  const resources = `К финалу: еда ${room.resources.food}, энергия ${room.resources.energy}, медикаменты ${room.resources.meds}.`;
+  return {
+    title: survived ? "СМЕНА ДОЖДАЛАСЬ" : "СМЕНА НЕ ДОЖДАЛАСЬ",
+    paragraphs: [
+      reason,
+      lost
+        ? `За партию выбыло ${lost} из ${room.players.length}: изгнания, ночные потери и кризис. ${resources}`
+        : `Никто не выбыл: смена прошла без потерь. ${resources}`,
+    ],
+    verdict: survived ? "Спасение пришло вовремя." : "Бункер не дотянул до спасения.",
+  };
+}
+
+async function aiRecap(room: any): Promise<void> {
+  const key = `${room.code}:recap`;
+  if (aiBusy.has(key)) return;
+  aiBusy.add(key);
+  room.recapRequested = true;
+  room.recapPending = true;
+  try {
+    const recap = await generateRecap(aiLog(room));
+    if (engine.rooms.get(room.code) !== room) return;
+    room.recap = recap || fallbackRecap(room);
+    room.recapPending = false;
+    saveRoom(room);
+    broadcast(room, currentOrigin);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
+async function aiNextEvent(room: any): Promise<void> {
+  const key = `${room.code}:event`;
+  if (aiBusy.has(key)) return;
+  aiBusy.add(key);
+  try {
+    const context = [
+      `день ${room.day}`,
+      `живых ${room.players.filter((p: any) => p.alive).length}`,
+      `еда ${room.resources.food}`,
+      `энергия ${room.resources.energy}`,
+      `медикаменты ${room.resources.meds}`,
+      `спасение через ${Math.max(1, (room.rescueDay || room.day) - room.day)} дн.`,
+    ].join(", ");
+    const event = await generateEvent(context);
+    if (engine.rooms.get(room.code) !== room) return;
+    if (room.state !== "night") return;
+    room.nextEvent = event || null;
+    saveRoom(room);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
+function scheduleAi(room: any): void {
+  // Разбор показываем всегда: без ключа — сухая сводка из лога, с моделью —
+  // она заменит её, как только ответит.
+  if (room.state === "end" && !room.recapRequested) {
+    room.recapRequested = true;
+    room.recap = fallbackRecap(room);
+    if (aiEnabled()) {
+      room.recapPending = true;
+      void aiRecap(room);
+    }
+    saveRoom(room);
+  }
+  if (!aiEnabled()) return;
+  if (room.state === "night" && !room.nextEvent) void aiNextEvent(room);
+}
+
 engine.setChangeHandler((room: any) => {
   room.touchedAt = Date.now();
   saveRoom(room);
@@ -425,6 +530,7 @@ engine.setChangeHandler((room: any) => {
     room.savedGameId = room.gameId;
     saveGame(room);
   }
+  scheduleAi(room);
   broadcast(room, currentOrigin);
   // боты ходят вслед за фазой (у них нет своей ленты — им нужен внешний толчок)
   driveBots(room);
@@ -560,10 +666,18 @@ async function handleAction(
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
     case "start": {
+      if (!room) return fail(session, "Бункер не найден.");
+      // Персонажи генерируются до старта: если модель не ответила, движок
+      // разложит карты из content.js — игра начнётся в любом случае.
+      let personas: any[] | null = null;
+      if (aiEnabled() && room.state === "lobby" && room.hostId === playerId) {
+        personas = await generatePersonas(
+          room.players.map((p: any) => p.name),
+          "техногенная катастрофа: воздух наверху отравлен, выход из бункера заблокирован",
+        );
+      }
       // исключение из общего правила: startGame принимает объект комнаты
-      const result = room
-        ? engine.startGame(room, playerId)
-        : { ok: false, error: "Бункер не найден." };
+      const result = engine.startGame(room, playerId, { personas: personas || undefined });
       return result?.ok === false ? fail(session, result.error) : done();
     }
     case "pace": {
@@ -726,6 +840,7 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
+<script type="module" src="/voice.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
 ${renderApp(snapshot, origin, tab)}
@@ -968,6 +1083,7 @@ Bun.serve({
     for (const name of [
       "/style.css",
       "/sound.js",
+      "/voice.js",
       "/favicon.svg",
       "/favicon-32.png",
       "/apple-touch-icon.png",

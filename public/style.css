@@ -2745,3 +2745,70 @@ body.landing {
 .target-card.self .target-meta {
   color: #4a4a4a;
 }
+
+/* ---------- разбор партии в финале ---------- */
+
+.recap {
+  margin: 4px 0 20px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--card-2);
+}
+
+.recap h4 {
+  margin: 8px 0 10px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.recap p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  margin-bottom: 8px;
+}
+
+.recap-verdict {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.recap.pending {
+  border-left-color: #3a3a3a;
+}
+
+.recap-skeleton {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.recap-skeleton i {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #222, #2c2c2c, #222);
+  background-size: 200% 100%;
+  animation: recap-shimmer 1.4s linear infinite;
+}
+
+.recap-skeleton i:last-child {
+  width: 62%;
+}
+
+@keyframes recap-shimmer {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}

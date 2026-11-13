@@ -155,6 +155,12 @@ async function main() {
     "игра: без горизонтального скролла",
   );
 
+  // голос: кнопка монтируется рядом со звуком (speechSynthesis есть в Chrome)
+  note(
+    await evaluate("!!document.querySelector('.top-actions .voice-btn')"),
+    "голос: кнопка в шапке",
+  );
+
   // подсказка «кто что раскрыл»: наводим на строку второго игрока
   const hover = await evaluate(
     '(() => { const r = document.querySelectorAll(".players-row")[1]; if (!r) return null; const b = r.getBoundingClientRect(); return { x: Math.round(b.left + 60), y: Math.round(b.top + 12) }; })()',
