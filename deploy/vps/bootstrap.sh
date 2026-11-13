@@ -16,18 +16,19 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates gnupg rsync ufw >/dev/null
 
-say "node 22"
-node_ok=false
-if command -v node >/dev/null 2>&1; then
-	major="$(node -v | sed 's/^v//' | cut -d. -f1)"
-	[ "$major" -ge 20 ] && node_ok=true
+say "bun"
+if ! command -v bun >/dev/null 2>&1 || [ ! -x /usr/local/bin/bun ]; then
+	curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
+	BUN_INSTALL=/usr/local bash /tmp/bun-install.sh >/dev/null
 fi
-if [ "$node_ok" = false ]; then
-	curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource.sh
-	bash /tmp/nodesource.sh >/dev/null
-	apt-get install -y -qq nodejs >/dev/null
+# bun — один статический бинарник: положим в /usr/local/bin, чтобы он был
+# доступен служебному пользователю bunker
+if [ -x /usr/local/bin/bun ]; then
+	echo "  bun $(/usr/local/bin/bun --version)"
+else
+	echo "  bun не установился" >&2
+	exit 1
 fi
-echo "  node $(node -v) · npm $(npm -v)"
 
 say "caddy"
 if ! command -v caddy >/dev/null 2>&1; then

@@ -41,7 +41,23 @@ function sidOf(req: Request): string {
   return jar.get('bunker_sid') ?? '';
 }
 
+// Сессии без комнаты и закрытые потоки копятся — подчищаем раз в 10 минут.
+setInterval(() => {
+  for (const [sid, session] of sessions) {
+    if (session.stream) continue;
+    if (session.room && engine.rooms.get(session.room)) continue;
+    sessions.delete(sid);
+    if (session.room && session.player) {
+      const room = engine.rooms.get(session.room);
+      if (!room) tabs.clear();
+    }
+  }
+}, 10 * 60 * 1000).unref?.();
+
 function sessionOf(sid: string): Session {
+  // Клиент без cookie не должен попадать в чужую сессию: даём ему одноразовую,
+  // которую не сохраняем (в неё нельзя войти — нет room).
+  if (!sid) return { room: null, player: null, stream: null, phaseKey: '', lastPayload: '' };
   let session = sessions.get(sid);
   if (!session) {
     session = { room: null, player: null, stream: null, phaseKey: '', lastPayload: '' };
@@ -113,10 +129,8 @@ function broadcast(room: any, origin: string) {
 
     let payload = '';
     payload += patchElement(renderTopbar(snapshot));
-    payload += patchElement(renderBoard(snapshot, origin));
+    payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
     payload += patchElement(renderOverlay(snapshot));
-    payload += patchElement(renderTabs(snapshot));
-    payload += patchElement(renderFeed(snapshot, sessionTab(session)));
     if (banner) payload += patchElement(`<div id="banner" class="phase-banner show" data-tone="${snapshot.state === 'night' ? 'night' : 'day'}">${phaseLabel(snapshot)}</div>`);
 
     if (payload === session.lastPayload) continue;
@@ -265,7 +279,7 @@ function landingHtml(origin: string, error = ''): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>БУНКЕР·9 — Сигнал тишины</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style-next.css">
 </head><body class="landing">
 <main class="landing-main">
   <section class="landing-hero">
@@ -301,7 +315,7 @@ function appHtml(snapshot: any, origin: string): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>БУНКЕР·9 — ${snapshot.state === 'lobby' ? 'лобби' : 'игра'}</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style-next.css">
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
 ${renderApp(snapshot, origin)}
@@ -343,7 +357,8 @@ Bun.serve({
   idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url);
-    const sid = sidOf(req);
+    // cookie выдаём всегда: без него нельзя ни создать бункер, ни войти
+    const sid = sidOf(req) || newSid();
     const origin = `${url.protocol}//${url.host}`;
     currentOrigin = origin;
 
@@ -371,10 +386,8 @@ Bun.serve({
           session.lastPayload = '';
           let payload = '';
           payload += patchElement(renderTopbar(snapshot));
-          payload += patchElement(renderBoard(snapshot, origin));
+          payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
           payload += patchElement(renderOverlay(snapshot));
-          payload += patchElement(renderTabs(snapshot));
-          payload += patchElement(renderFeed(snapshot, sessionTab(session)));
           controller.enqueue(enc.encode(payload));
         },
         cancel() {
@@ -400,13 +413,17 @@ Bun.serve({
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const session = sessionOf(sid);
       const data = snapshotFor(session);
-      if (data) return new Response(appHtml(data.snapshot, origin), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (data) {
+        return new Response(appHtml(data.snapshot, origin), {
+          headers: { 'content-type': 'text/html; charset=utf-8', ...cookieFor(sid) },
+        });
+      }
       return new Response(landingHtml(origin), {
         headers: { 'content-type': 'text/html; charset=utf-8', ...cookieFor(sid) },
       });
     }
 
-    for (const name of ['/style.css', '/favicon.ico']) {
+    for (const name of ['/style.css', '/style-next.css', '/favicon.ico']) {
       if (url.pathname === name) {
         const file = Bun.file(PUBLIC + name.slice(1));
         if (await file.exists()) return new Response(file);

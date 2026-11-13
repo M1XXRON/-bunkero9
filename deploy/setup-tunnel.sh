@@ -11,6 +11,9 @@ DOMAIN="${DOMAIN:-bunker9.lol}"
 # 127.0.0.1, а не localhost: localhost может резолвиться в ::1 и отдать
 # чужому приложению, если оно заняло тот же порт по IPv6.
 ORIGIN="${ORIGIN:-http://127.0.0.1:3100}"
+# staging: новая реализация крутится рядом и смотрится до переключения домена
+STAGING_HOST="${STAGING_HOST:-next.$DOMAIN}"
+STAGING_ORIGIN="${STAGING_ORIGIN:-http://127.0.0.1:3101}"
 CFD="${CLOUDFLARED:-$(command -v cloudflared || echo "$HOME/dev/bin/cloudflared")}"
 
 if [ ! -x "$CFD" ]; then
@@ -54,6 +57,8 @@ ingress:
     service: $ORIGIN
   - hostname: www.$DOMAIN
     service: $ORIGIN
+  - hostname: $STAGING_HOST
+    service: $STAGING_ORIGIN
   # WebSocket (socket.io) cloudflared проксирует сам, доп. настроек не нужно
   - service: http_status:404
 YML
@@ -80,6 +85,7 @@ TXT
 echo "· привязываю DNS"
 route_one "$DOMAIN"
 route_one "www.$DOMAIN"
+route_one "$STAGING_HOST"
 
 echo ""
 echo "Готово. Запуск на переднем плане (для проверки):"

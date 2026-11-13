@@ -414,7 +414,21 @@ function scene(snap: Snapshot): string {
     </section>`;
 }
 
-function chatPanel(snap: Snapshot): string {
+function feedHtml(snap: Snapshot, activeTab = 'day'): string {
+  const channel = activeTab || 'day';
+  return snap.messages
+    .filter((m) => m.kind !== 'chat' || m.channel === channel || m.channel === 'system')
+    .slice(-60)
+    .map((m) => {
+      if (m.kind === 'chat') {
+        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span>${esc(m.text)}</span></div>`;
+      }
+      return `<div class="chat-system tone-${esc(m.tone || 'info')}">${esc(m.text)}</div>`;
+    })
+    .join('');
+}
+
+function chatPanel(snap: Snapshot, activeTab = 'day'): string {
   const allowed = [
     snap.chat.day ? 'day' : null,
     snap.chat.mafia ? 'mafia' : null,
@@ -430,7 +444,7 @@ function chatPanel(snap: Snapshot): string {
     <section class="panel chat-panel">
       <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Лобби</h2></div></header>
       <div id="chatTabs">${tabs}</div>
-      <div class="chat-feed" id="chatFeed"></div>
+      <div class="chat-feed" id="chatFeed">${feedHtml(snap, activeTab)}</div>
       <div class="chat-form">
         <input id="chatInput" name="msg" autocomplete="off" placeholder="Сообщение в зал…" ${allowed.length ? '' : 'disabled'}>
         <button id="chatSend" type="button" class="send-btn" ${allowed.length ? '' : 'disabled'}
@@ -503,27 +517,33 @@ function rules(): string {
 }
 
 // ---------- сборка ответов ----------
-// Контракт патчей: шелл содержит #topbar #board #overlay #banner #chatTabs #chatFeed,
-// каждое обновление заменяет элемент по совпадающему id. Поле ввода чата живёт вне
-// патчей, поэтому текст и курсор не сбрасываются.
+// Контракт стилей: #game — flex-колонка, прямыми потомками идут #topbar и
+// #board (он же .game-grid), внутри — три колонки. Патчи заменяют эти узлы.
 
 export function renderApp(snap: Snapshot, origin: string): string {
   (globalThis as any).__ORIGIN__ = origin;
   const signals = `{dossier: false, rules: false, reveal: false, msg: '', tab: '${snap.chat.day ? 'day' : snap.chat.mafia ? 'mafia' : 'dead'}'}`;
+  const shell = snap.state === 'lobby' ? 'lobby' : 'game';
   return `<div id="app" data-signals="${signals}" data-init="@get('/stream')">
-    ${topbar(snap)}
-    ${renderBoard(snap, origin)}
-    <div id="overlay">${dossier(snap)}${rules()}</div>
-    <div id="banner" class="phase-banner"></div>
-    <div id="error"></div>
-    <div id="chat">${chatPanel(snap)}</div>
+    <section id="${shell}" class="screen">
+      ${topbar(snap)}
+      <div id="banner" class="phase-banner"></div>
+      ${renderBoard(snap, origin)}
+      <div id="overlay">${dossier(snap)}${rules()}</div>
+      <div id="error"></div>
+    </section>
   </div>`;
 }
 
-export function renderBoard(snap: Snapshot, origin: string): string {
+export function renderBoard(snap: Snapshot, origin: string, tab = 'day'): string {
   (globalThis as any).__ORIGIN__ = origin;
-  if (snap.state === 'lobby') return `<div id="board">${lobby(snap)}</div>`;
-  return `<div id="board"><main class="game-grid">${playersPanel(snap)}${scene(snap)}</main></div>`;
+  if (snap.state === 'lobby') {
+    return `<div id="board"><main class="lobby-main">
+      ${lobby(snap)}
+      <div class="lobby-chat-panel">${chatPanel(snap, tab)}</div>
+    </main></div>`;
+  }
+  return `<main id="board" class="game-grid">${playersPanel(snap)}${scene(snap)}${chatPanel(snap, tab)}</main>`;
 }
 
 export function renderOverlay(snap: Snapshot): string {
@@ -547,7 +567,6 @@ export function renderChat(snap: Snapshot): string {
   return `<div id="chat">${chatPanel(snap)}</div>`;
 }
 
-// Только лента — патч не трогает поле ввода
 export function renderFeed(snap: Snapshot, activeTab: string): string {
   const channel = activeTab || 'day';
   const list = snap.messages

@@ -34,7 +34,7 @@ echo "· копирую код"
 rsync -az --delete \
 	-e "ssh ${SSH_OPTS[*]}" \
 	--exclude node_modules --exclude .git --exclude test \
-	--exclude screenshots --exclude deploy \
+	--exclude screenshots --exclude deploy --exclude node_modules \
 	./ "$USER_AT:$REMOTE_DIR/app/"
 
 echo "· копирую серверную часть"
@@ -45,13 +45,8 @@ echo "· серверная часть (идемпотентно)"
 ssh "${SSH_OPTS[@]}" "$USER_AT" "DOMAIN=$DOMAIN bash $REMOTE_DIR/deploy/bootstrap.sh"
 
 echo ""
-echo "· зависимости и права"
-ssh "${SSH_OPTS[@]}" "$USER_AT" "
-	set -e
-	chown -R bunker:bunker $REMOTE_DIR
-	cd $REMOTE_DIR/app
-	runuser -u bunker -- npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -3
-"
+echo "· права"
+ssh "${SSH_OPTS[@]}" "$USER_AT" "set -e; chown -R bunker:bunker $REMOTE_DIR"
 
 echo ""
 echo "· перезапуск"

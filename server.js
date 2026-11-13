@@ -4,7 +4,6 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const express = require('express');
-const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const engine = require('./src/engine');
 
@@ -45,37 +44,6 @@ app.get('/api/info', (_req, res) => {
     port: PORT,
   });
 });
-// QR для приглашения: генерируется на сервере, поэтому клиенту не нужен
-// ни лишний JS, ни внешний сервис — работает и в локальной сети без интернета.
-const qrCache = new Map();
-app.get('/qr.svg', async (req, res) => {
-  const text = String(req.query.text || '').slice(0, 512);
-  if (!text) {
-    res.status(400).type('text/plain').send('text is required');
-    return;
-  }
-  let svg = qrCache.get(text);
-  if (!svg) {
-    try {
-      svg = await QRCode.toString(text, {
-        type: 'svg',
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        color: { dark: '#14171cff', light: '#f3efe6ff' },
-      });
-    } catch (err) {
-      res.status(500).type('text/plain').send('qr failed');
-      return;
-    }
-    if (qrCache.size > 200) qrCache.clear();
-    qrCache.set(text, svg);
-  }
-  res
-    .type('image/svg+xml')
-    .set('Cache-Control', 'public, max-age=3600, immutable')
-    .send(svg);
-});
-
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'], etag: false, maxAge: 0 }));
 app.get('/health', (_req, res) => {
   res.json({ ok: true, rooms: engine.rooms.size, uptime: Math.round(process.uptime()) });
