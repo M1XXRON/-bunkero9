@@ -349,6 +349,7 @@ function landingHtml(origin: string, error = ""): string {
 <meta property="og:description" content="Бункер на 5–15 человек: раскрывай карты, ищи заражённых, голосуй. Одна ссылка — и вы играете.">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="/style.css?v=2">
+<script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <main class="landing-main">
   <section class="landing-hero">

@@ -450,18 +450,48 @@ function endScene(snap: Snapshot): string {
 
 function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
-    intro: () => `<div class="action-block">
-        <h3>Добро пожаловать в «Кольцо-9»</h3>
-        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и чужие голоса за стеной.</p>
-        <p class="note">Роли уже розданы. Первый день начнётся автоматически.</p>
-        <button class="btn btn-secondary" data-on:click="$dossier = true">Открыть досье</button>
-      </div>`,
+    intro: () => {
+      const me = snap.me;
+      const role = ROLE_NAME[me.role || ""] || "—";
+      const roleTone = me.role || "human";
+      return `<div class="action-block intro-hero">
+        <span class="eyebrow">ПРОБУЖДЕНИЕ · КОЛЬЦО-9</span>
+        <h3>Добро пожаловать в бункер</h3>
+        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор
+        и чужие голоса за стеной. Роли уже розданы.</p>
+        <div class="intro-role tone-bg-${roleTone}">
+          <span class="intro-role-label">ВАША РОЛЬ</span>
+          <b class="tone-${roleTone}">${esc(role)}</b>
+          <span class="intro-role-hint">Подробности и личные карты — в досье</span>
+        </div>
+        <div class="intro-steps">
+          <div class="step"><b>1</b><span>Каждый день вы раскрываете <em>одну карту</em> — её увидят все</span></div>
+          <div class="step"><b>2</b><span>Обсуждение и голосование: изгнанный покидает бункер</span></div>
+          <div class="step"><b>3</b><span>Ночью заражённые выбирают жертву — врач может спасти</span></div>
+        </div>
+        <button class="btn btn-primary" data-on:click="$dossier = true">Открыть досье</button>
+      </div>`;
+    },
     reveal: () => revealScene(snap),
-    discussion: () => `<div class="action-block">
+    discussion: () => {
+      const opened = snap.players
+        .flatMap((p) => p.traits.map((t) => ({ who: p.name, cat: t.label, val: t.value })))
+        .slice(-4);
+      const openedHtml = opened.length
+        ? `<div class="opened-cards">${opened
+            .map(
+              (t) =>
+                `<div class="opened-card"><span class="oc-who">${esc(t.who)}</span><span class="oc-cat">${esc(t.cat)}</span><span class="oc-val">${esc(t.val)}</span></div>`,
+            )
+            .join("")}</div>`
+        : "";
+      return `<div class="action-block">
         <h3>Кому вы верите?</h3>
         <p>Сопоставляйте карты, голоса и ночные потери. Голосование начнётся автоматически.</p>
+        ${openedHtml}
         <p class="note">Доверие — ресурс. Здесь его расходуют быстрее еды.</p>
-      </div>`,
+      </div>`;
+    },
     vote: () => voteScene(snap),
     night: () => nightScene(snap),
     end: () => endScene(snap),
