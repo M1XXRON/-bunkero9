@@ -43,6 +43,17 @@ const PUBLIC = process.env.PUBLIC_DIR ?? `${process.cwd()}/public`;
 // аватарка «пропадала».
 const AVATARS: string[] = require("./src/content.js").AVATARS;
 
+// Версия стилей = хеш содержимого файла. Раньше её поднимали руками и однажды
+// забыли: браузер с Cloudflare держали старый CSS, и новая разметка разъехалась.
+const STYLE_VER = (() => {
+  try {
+    const text = require("node:fs").readFileSync(`${PUBLIC}/style.css`, "utf8");
+    return Bun.hash(text).toString(36).slice(0, 8);
+  } catch {
+    return "6";
+  }
+})();
+
 type Session = {
   room: string | null;
   player: string | null;
@@ -687,7 +698,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <header class="landing-top">
@@ -748,7 +759,7 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">

@@ -169,10 +169,15 @@ async function main() {
       note(rows === 5, `в подсказке все пять категорий (${rows})`);
       const open = await evaluate("document.querySelectorAll('#peek .peek-row.on').length");
       note(open === 0, `скрытые карты не раскрываются (открыто ${open})`);
-      const leaked = await evaluate(
-        '[...document.querySelectorAll("#peek .peek-row.off .peek-val")].some((e) => e.textContent.trim() !== "скрыта")',
+      // у скрытой карты значения нет вовсе — только категория
+      const slotsLeak = await evaluate(
+        '(() => { const rows = [...document.querySelectorAll(".players-row .peek-source .peek-row:not(.on) .peek-val")]; return rows.some((e) => e.textContent.trim().length > 0); })()',
       );
-      note(!leaked, "значения скрытых карт не утекают в разметку");
+      note(!slotsLeak, "значения скрытых карт не утекают в разметку");
+      const srcHeight = await evaluate(
+        "(() => { const e = document.querySelector('.players-row .peek-source'); return e ? e.getBoundingClientRect().height : -1; })()",
+      );
+      note(srcHeight === 0, `источник подсказки не влияет на строку (высота ${srcHeight})`);
     }
   }
 
@@ -247,6 +252,13 @@ async function main() {
         "document.querySelectorAll('#peek .peek-row.on').length",
       );
       note(revealedInPeek === 1, `в подсказке видно раскрытую карту (${revealedInPeek})`);
+      const greenValue = await evaluate(
+        '(() => { const e = document.querySelector("#peek .peek-row.on .peek-val"); return e ? getComputedStyle(e).color : ""; })()',
+      );
+      note(
+        String(greenValue).replace(/\s/g, "") === "rgb(111,220,140)",
+        `раскрытое значение зелёное (${greenValue})`,
+      );
       const endTurn = await evaluate("!!document.querySelector('.end-turn-btn')");
       note(endTurn, "раскрытие: есть кнопка «Завершить ход»");
       if (endTurn) {

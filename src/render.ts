@@ -300,21 +300,35 @@ function botControls(snap: Snapshot): string {
 
 // ---------- игровой экран ----------
 
-// Подсказка при наведении: все пять категорий, раскрытые — со значением,
-// скрытые — запечатаны. Значения скрытых карт на клиент не уходят вообще.
+// Подсказка при наведении: все пять категорий по порядку. Раскрытые — зелёным
+// со значением, скрытые — серым, только название категории (значение скрытой
+// карты физически не приходит на клиент).
+const LOCK_ICON =
+  '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="5.2" width="7" height="5" rx="1.2"/><path d="M4.3 5.2V4a1.7 1.7 0 0 1 3.4 0v1.2"/></svg>';
+const CHECK_ICON =
+  '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.2 6.4l2.4 2.4 5.2-5.4"/></svg>';
+
 function peekCard(p: Player): string {
+  // Раскрытая — категория + значение зелёным. Скрытая — только категория серым,
+  // вместо значения пунктир: видно, что слот есть, но содержимое неизвестно.
   const slots = (p.traitSlots || [])
-    .map(
-      (slot) => `<div class="peek-row ${slot.revealed ? "on" : "off"}">
-        <span class="peek-cat">${esc(slot.label)}</span>
-        <span class="peek-val">${slot.revealed ? esc(slot.value || "—") : "скрыта"}</span>
-        <span class="peek-mark">${slot.revealed ? "на столе" : "?"}</span>
-      </div>`,
+    .map((slot) =>
+      slot.revealed
+        ? `<div class="peek-row on">
+            <span class="peek-cat">${esc(slot.label)}</span>
+            <span class="peek-val">${esc(slot.value || "—")}</span>
+            <span class="peek-ico">${CHECK_ICON}</span>
+          </div>`
+        : `<div class="peek-row">
+            <span class="peek-cat">${esc(slot.label)}</span>
+            <span class="peek-val"></span>
+            <span class="peek-ico">${LOCK_ICON}</span>
+          </div>`,
     )
     .join("");
   const state = !p.alive
     ? p.left
-      ? "вышел из бункера"
+      ? "вышел"
       : p.death?.cause === "exile"
         ? "изгнан"
         : "погиб"
@@ -328,9 +342,9 @@ function peekCard(p: Player): string {
     : "";
   return `<div class="peek-head">
       ${avatar(p, "sm")}
-      <div>
+      <div class="peek-id">
         <div class="peek-name">${esc(p.name)}</div>
-        <div class="peek-meta">${esc(state)} · карт раскрыто ${p.traitsRevealed} / ${p.totalTraits} ${role}</div>
+        <div class="peek-meta">${esc(state)} · раскрыто ${p.traitsRevealed} из ${p.totalTraits} ${role}</div>
       </div>
     </div>
     <div class="peek-list">${slots}</div>`;
@@ -350,7 +364,7 @@ function playersPanel(snap: Snapshot): string {
         <div class="players-row ${p.alive ? "" : "dead"} ${p.id === snap.me.id ? "is-me" : ""} ${
           snap.turn?.playerId === p.id ? "current-turn" : ""
         }" data-peek>
-          <div class="peek-source" aria-hidden="true">${peekCard(p)}</div>
+          <div class="peek-source" hidden aria-hidden="true">${peekCard(p)}</div>
           ${avatar(p, "xs")}
           <span class="pname">${esc(p.name)}</span>
           ${p.teammate ? '<span class="mini-badge mafia">свой</span>' : ""}
