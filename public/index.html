@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08090b">
+  <meta name="description" content="БУНКЕР·9 — браузерная социальная игра для 5–15 человек. Днём — раскрывайте карты и ищите заражённых. Ночью — не доверяйте тишине.">
+  <title>БУНКЕР·9 — Сигнал тишины</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0d10'/%3E%3Cpath d='M18 40V22l14-8 14 8v18H18z' fill='none' stroke='%23f2b35c' stroke-width='5'/%3E%3Ccircle cx='32' cy='34' r='5' fill='%23f2b35c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Лента объявления фазы: всплывает при смене дня/ночи и при потерях -->
+  <div id="phaseBanner" class="phase-banner" role="status" aria-live="polite"></div>
+
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div id="connectionBanner" class="connection-banner hidden">
+    <span class="conn-dot"></span>
+    <span id="connectionText">Связь потеряна. Переподключаемся…</span>
+  </div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+  <section id="landing" class="screen landing">
+    <header class="landing-top">
+      <div class="wordmark">
+        <span class="wordmark-mark">9</span>
+        <span class="wordmark-text">БУНКЕР<i>·</i>9</span>
+      </div>
+      <div class="landing-top-actions">
+        <button class="btn btn-ghost btn-small" data-action="rules">Правила</button>
+      </div>
+    </header>
+
+    <main class="landing-main">
+      <div class="hero">
+        <div class="kicker"><span class="pulse-dot"></span>СОЦИАЛЬНАЯ ИГРА · 5—15 ВЫЖИВШИХ</div>
+        <h1 class="hero-title">БУНКЕР<span>·9</span></h1>
+        <div class="hero-subtitle">СИГНАЛ ТИШИНЫ</div>
+        <p class="hero-lede">
+          Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь.
+          Теперь у вас есть еда, генератор и чужие голоса за стеной. И кто-то внутри, кто не был человеком ещё вчера.
+        </p>
+        <div class="feature-row">
+          <span><i>01</i>роли и ложь</span>
+          <span><i>02</i>общие ресурсы</span>
+          <span><i>03</i>ночной врач</span>
+          <span><i>04</i>голосования</span>
+        </div>
+        <div class="story-plate">
+          <span class="story-plate-label">ПРАВИЛО БУНКЕРА</span>
+          <p>Одна карта о себе — каждый день. Один выживший — каждый рассвет. Не показывайте экран соседям.</p>
+        </div>
+      </div>
+
+      <section class="auth-card">
+        <div class="auth-head">
+          <span class="eyebrow">ВХОД В КОЛЬЦО-9</span>
+          <h2>Назовите себя</h2>
+          <p>Позывной увидят все, кто заперт с вами.</p>
+        </div>
+
+        <label class="field">
+          <span>Позывной</span>
+          <input id="nameInput" type="text" maxlength="16" autocomplete="nickname" placeholder="Например, Ворон" />
+        </label>
+
+        <div class="field">
+          <span>Ваша метка</span>
+          <div id="avatarPicker" class="avatar-picker" role="listbox" aria-label="Выберите метку"></div>
+        </div>
+
+        <button id="createBtn" class="btn btn-primary btn-wide" type="button">
+          Создать бункер
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+
+        <div class="or-line"><span>или войти по коду</span></div>
+
+        <form id="joinForm" class="join-form">
+          <input id="codeInput" class="code-input" type="text" maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" placeholder="КОД" aria-label="Код комнаты" />
+          <button class="btn btn-secondary" type="submit">Войти</button>
+        </form>
+
+        <div id="landingError" class="form-error" role="alert"></div>
+        <div id="returnSession" class="return-session hidden">
+          <div>
+            <span class="eyebrow">СОХРАНЁННАЯ СЕССИЯ</span>
+            <p id="returnSessionText"></p>
+          </div>
+          <button id="returnBtn" class="btn btn-small btn-secondary" type="button">Вернуться</button>
+        </div>
+
+        <p class="auth-footnote">Без аккаунтов и установки. Код и ссылку пришлёт хост.</p>
+      </section>
+    </main>
+
+    <footer class="landing-footer">
+      <span>КОЛЬЦО-9 · ПРОТОКОЛ ТИШИНЫ</span>
+      <span>НЕ ОТКРЫВАЙТЕ ДВЕРЬ ДО РАССВЕТА</span>
+    </footer>
+  </section>
+
+  <section id="lobby" class="screen hidden">
+    <header class="lobby-top">
+      <div class="wordmark">
+        <span class="wordmark-mark">9</span>
+        <span class="wordmark-text">БУНКЕР<i>·</i>9</span>
+      </div>
+      <div class="lobby-room-pill">
+        <span class="eyebrow">КОМНАТА</span>
+        <b id="lobbyCode">····</b>
+        <button class="icon-btn" data-action="copy-code" title="Скопировать код" aria-label="Скопировать код">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+      <div class="lobby-top-actions">
+        <button class="btn btn-ghost btn-small" data-action="rules">Правила</button>
+        <button class="btn btn-ghost btn-small" data-action="leave">Выйти</button>
+      </div>
+    </header>
+
+    <main class="lobby-main">
+      <div class="lobby-column">
+        <section class="invite-card panel">
+          <div class="invite-body">
+            <div class="invite-copy">
+              <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
+              <h1>Код бункера <b id="lobbyCodeBig">····</b></h1>
+              <p>Отправьте друзьям код, ссылку или покажите QR-код.</p>
+            </div>
+            <div class="invite-link-row">
+              <input id="inviteLink" class="invite-link" type="text" readonly aria-label="Ссылка-приглашение" />
+              <button class="btn btn-secondary" data-action="copy-link">Копировать</button>
+            </div>
+            <div class="invite-meta">
+              <span><i class="dot online"></i><b id="lobbyOnline">0</b> на связи</span>
+              <span><i class="dot"></i><b id="lobbyTotal">0</b> / 15 мест</span>
+            </div>
+          </div>
+          <aside class="invite-qr" id="inviteQr" hidden>
+            <img id="inviteQrImg" alt="QR-код со ссылкой на бункер" />
+            <span>Сканируйте камерой</span>
+          </aside>
+        </section>
+
+        <section class="panel players-lobby-panel">
+          <header class="panel-head">
+            <div>
+              <span class="eyebrow">СПИСОК ВЫЖИВШИХ</span>
+              <h2>Кто внутри</h2>
+            </div>
+            <span class="seat-count" id="lobbySeatCount">0 / 15</span>
+          </header>
+          <div id="lobbyPlayers" class="lobby-players"></div>
+        </section>
+
+        <section class="panel lobby-settings">
+          <div class="settings-copy">
+            <span class="eyebrow">ПРОТОКОЛ</span>
+            <h2>Темп смены</h2>
+            <p id="paceDescription">Спокойные раунды: время договорить и переспросить.</p>
+          </div>
+          <div class="pace-switch" id="paceSwitch" role="group" aria-label="Темп игры">
+            <button class="pace-btn" data-action="pace" data-pace="normal">Обычный</button>
+            <button class="pace-btn" data-action="pace" data-pace="fast">Быстрый</button>
+          </div>
+          <div class="role-preview" id="rolePreview"></div>
+          <div class="lobby-start-row">
+            <div class="start-copy">
+              <strong id="startTitle">Ждём выживших</strong>
+              <span id="startHint">Нужно минимум 5 человек.</span>
+            </div>
+            <button id="startBtn" class="btn btn-primary" type="button" data-action="start" disabled>Открыть бункер</button>
+          </div>
+          <p id="hostHint" class="host-hint"></p>
+        </section>
+      </div>
+
+      <aside class="panel lobby-chat-panel">
+        <header class="panel-head chat-panel-head">
+          <div>
+            <span class="eyebrow">ОТКРЫТАЯ ЛИНИЯ</span>
+            <h2>Лобби</h2>
+          </div>
+          <span class="chat-live"><i></i>LIVE</span>
+        </header>
+        <div id="lobbyChatFeed" class="chat-feed"></div>
+        <form id="lobbyChatForm" class="chat-form">
+          <input id="lobbyChatInput" type="text" maxlength="240" placeholder="Сказать что-нибудь в бункер…" autocomplete="off" />
+          <button type="submit" class="send-btn" aria-label="Отправить">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l15-7-4.8 14-3-5.1L4 12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+      </aside>
+    </main>
+  </section>
+
+  <section id="game" class="screen hidden">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="wordmark wordmark-small">
+          <span class="wordmark-mark">9</span>
+          <span class="wordmark-text">БУНКЕР<i>·</i>9</span>
+        </div>
+        <button class="room-code-chip" data-action="copy-code" title="Скопировать код комнаты">
+          <span id="topCode">····</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+      <div id="topPhase" class="top-phase"></div>
+      <div id="resources" class="resources"></div>
+      <div id="topActions" class="top-actions"></div>
+    </header>
+    <div class="phase-progress" aria-hidden="true"><div id="phaseBarFill" class="phase-bar-fill"></div></div>
+
+    <main class="game-grid">
+      <aside class="panel players-panel">
+        <header class="panel-head players-head">
+          <div>
+            <span class="eyebrow">В БУНКЕРЕ</span>
+            <h2>Выжившие</h2>
+          </div>
+          <span class="seat-count" id="gameAliveCount">0</span>
+        </header>
+        <div id="playersList" class="players-list"></div>
+        <div class="players-legend">
+          <span><i class="trait-pip done"></i>карта раскрыта</span>
+          <span><i class="trait-pip"></i>скрыта</span>
+        </div>
+      </aside>
+
+      <section id="scene" class="scene" aria-live="polite"></section>
+
+      <aside class="panel chat-panel">
+        <header class="chat-panel-head">
+          <div class="chat-title">
+            <span class="eyebrow">ЗАКРЫТАЯ ЛИНИЯ</span>
+            <h2>Связь</h2>
+          </div>
+          <div id="chatTabs" class="chat-tabs"></div>
+        </header>
+        <div id="gameChatFeed" class="chat-feed"></div>
+        <form id="gameChatForm" class="chat-form">
+          <input id="gameChatInput" type="text" maxlength="240" placeholder="Сообщение…" autocomplete="off" />
+          <button type="submit" class="send-btn" aria-label="Отправить">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l15-7-4.8 14-3-5.1L4 12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+        <div id="chatHint" class="chat-hint"></div>
+      </aside>
+    </main>
+  </section>
+
+  <div id="modalRoot" class="modal-root hidden" role="dialog" aria-modal="true"></div>
+  <div id="endRoot" class="end-root hidden" role="dialog" aria-modal="true"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

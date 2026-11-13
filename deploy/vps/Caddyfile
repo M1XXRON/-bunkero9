@@ -1,0 +1,17 @@
+# Caddy сам получает и продлевает сертификат Let's Encrypt.
+# Шаблон: deploy/deploy.sh подставляет реальный домен при установке.
+
+bunker9.lol {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3100
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+www.bunker9.lol {
+	redir https://bunker9.lol{uri} permanent
+}

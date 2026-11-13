@@ -1,0 +1,45 @@
+#!/bin/bash
+# Проверка, что по домену отдаётся именно бункер, а не чужое приложение.
+# Запускать после любой правки портов, туннеля или соседних сервисов.
+#
+#   ./deploy/smoke.sh                      # https://bunker9.lol
+#   DOMAIN=play.example.com ./deploy/smoke.sh
+set -uo pipefail
+
+DOMAIN="${DOMAIN:-bunker9.lol}"
+BASE="https://$DOMAIN"
+fail=0
+
+ok() { printf '  ✓ %s\n' "$1"; }
+bad() { printf '  ✗ %s\n' "$1"; fail=$((fail + 1)); }
+
+echo "проверяю $BASE"
+
+code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/")
+[ "$code" = "200" ] && ok "главная: 200" || bad "главная: $code"
+
+title=$(curl -s -m 15 "$BASE/" | grep -o '<title>[^<]*</title>' | sed 's/<[^>]*>//g')
+case "$title" in
+*БУНКЕР*) ok "заголовок: $title" ;;
+*) bad "заголовок чужой: ${title:-пусто}" ;;
+esac
+
+health=$(curl -s -m 15 "$BASE/health")
+case "$health" in
+*'"ok":true'*) ok "health: $health" ;;
+*) bad "health чужой: ${health:-пусто}" ;;
+esac
+
+qrid=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/qr.svg?text=$BASE%2F%23SMOKE")
+[ "$qrid" = "200" ] && ok "QR: 200" || bad "QR: $qrid"
+
+wcode=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "https://www.$DOMAIN/")
+[ "$wcode" = "301" ] && ok "www: 301" || bad "www: $wcode (ожидался 301)"
+
+echo ""
+if [ "$fail" -eq 0 ]; then
+	echo "всё в порядке"
+else
+	echo "проблем: $fail"
+	exit 1
+fi

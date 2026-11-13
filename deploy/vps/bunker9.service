@@ -1,0 +1,34 @@
+[Unit]
+Description=БУНКЕР·9 — веб-версия
+Documentation=https://bunker9.lol
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bunker
+Group=bunker
+WorkingDirectory=/opt/bunker9/app
+
+Environment=NODE_ENV=production
+Environment=PORT=3100
+# Слушаем только локально: наружу выставляет Caddy с TLS.
+Environment=HOST=127.0.0.1
+
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+SyslogIdentifier=bunker9
+
+# Изоляция: сервису нечего писать на диск, кроме своего каталога
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/bunker9/app
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
