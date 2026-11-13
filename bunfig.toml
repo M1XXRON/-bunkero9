@@ -1,0 +1,7 @@
+[fmt]
+# Стиль проекта: 100 символов, двойные кавычки, точки с запятой.
+# Вендоренный Datastar и движок игры (src/engine.js, src/content.js) не трогаем —
+# путь к ним исключается в скрипте `fmt` (у [fmt] нет списка ignore).
+printWidth = 100
+semi = true
+singleQuote = false

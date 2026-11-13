@@ -18,6 +18,11 @@ cd "$(dirname "$0")/../.."
 echo "· проект: $(pwd)"
 echo "· сервер: $USER_AT"
 
+if [ "${SKIP_VERIFY:-0}" != "1" ]; then
+	echo "· проверки перед выкладкой (bun check + fmt + тесты)"
+	./scripts/bun.sh run verify || { echo "  проверки не прошли — деплой остановлен (SKIP_VERIFY=1 чтобы обойти)"; exit 1; }
+fi
+
 echo ""
 echo "· проверяю ssh"
 ssh "${SSH_OPTS[@]}" "$USER_AT" "echo '  ssh ok · ' \$(hostname)" || {

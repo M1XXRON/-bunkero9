@@ -6,8 +6,15 @@
   "scripts": {
     "start": "bun run server.ts",
     "dev": "bun --watch run server.ts",
+    "check": "./scripts/bun.sh check --no-script",
+    "fmt": "./scripts/bun.sh fmt --no-script server.ts src/render.ts test tools deploy public/style.css README.md",
+    "fmt:check": "./scripts/bun.sh fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md",
+    "verify": "./scripts/bun.sh check --no-script && ./scripts/bun.sh fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md && node test/sim-bun.mjs",
     "test": "node test/sim-bun.mjs",
     "test:15": "BOTS=15 node test/sim-bun.mjs"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "^1.4.4"
+  }
 }
