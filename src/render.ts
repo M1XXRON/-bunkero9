@@ -45,6 +45,8 @@ export type Snapshot = {
     roleLabel: string | null;
     traits: { cat: string; label: string; value: string; revealed: boolean }[];
     canReveal: boolean;
+    isMyTurn: boolean;
+    canEndTurn: boolean;
     revealedThisRound: boolean;
     votedFor: string | null;
     nightTarget: string | null;
@@ -72,6 +74,21 @@ export type Snapshot = {
     text: string;
   }[];
   preview: { infected: number; doctor: number; humans: number };
+  turn: {
+    playerId: string | null;
+    name: string | null;
+    stage: "reveal" | "confirm" | "done";
+    index: number;
+    total: number;
+    order: {
+      id: string;
+      name: string;
+      alive: boolean;
+      revealed: boolean;
+      done: boolean;
+      current: boolean;
+    }[];
+  } | null;
   night: { mafiaVotes?: Record<string, string>; doctorTarget?: string };
   ending: { title: string; text: string } | null;
 };
@@ -293,7 +310,9 @@ function playersPanel(snap: Snapshot): string {
         : "";
       const votes = p.votesAgainst > 0 ? `<span class="vote-pin">${p.votesAgainst}</span>` : "";
       return `
-        <div class="players-row ${p.alive ? "" : "dead"} ${p.id === snap.me.id ? "is-me" : ""}">
+        <div class="players-row ${p.alive ? "" : "dead"} ${p.id === snap.me.id ? "is-me" : ""} ${
+          snap.turn?.playerId === p.id ? "current-turn" : ""
+        }">
           ${avatar(p, "xs")}
           <span class="pname">${esc(p.name)}</span>
           ${p.teammate ? '<span class="mini-badge mafia">свой</span>' : ""}
@@ -314,6 +333,53 @@ function playersPanel(snap: Snapshot): string {
       </header>
       <div class="players-list">${rows}</div>
     </section>`;
+}
+
+// «Ваши карты» — всегда на экране, не только в досье: игрок в любой момент
+// видит свои характеристики и что из них уже на столе.
+function ownCards(snap: Snapshot): string {
+  if (snap.state === "lobby") return "";
+  const rows = snap.me.traits
+    .map(
+      (t) => `<div class="own-card ${t.revealed ? "revealed" : ""}">
+        <span class="own-cat">${esc(t.label)}</span>
+        <span class="own-value">${esc(t.value)}</span>
+        <span class="own-mark">${t.revealed ? "на столе" : "скрыта"}</span>
+      </div>`,
+    )
+    .join("");
+  return `<section class="panel own-panel">
+    <header class="panel-head">
+      <div><span class="eyebrow">ЛИЧНОЕ ДЕЛО</span><h2>Ваши карты</h2></div>
+      <span class="seat-count">${snap.me.traits.filter((t) => t.revealed).length} / ${snap.me.traits.length}</span>
+    </header>
+    <div class="own-list">${rows}</div>
+  </section>`;
+}
+
+function turnStrip(snap: Snapshot): string {
+  const turn = snap.turn;
+  if (!turn || !turn.order.length) return "";
+  const chips = turn.order
+    .map((p) => {
+      const cls = [
+        "turn-chip",
+        p.current ? "current" : "",
+        p.done || p.revealed ? "done" : "",
+        p.alive ? "" : "dead",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<span class="${cls}">${p.current ? '<i class="turn-dot"></i>' : ""}${esc(p.name)}<b>${p.revealed ? "✓" : ""}</b></span>`;
+    })
+    .join("");
+  return `<div class="turn-strip">
+    <div class="turn-head">
+      <span class="eyebrow">ОЧЕРЕДЬ РАСКРЫТИЯ</span>
+      <span class="seat-count">${turn.index} / ${turn.total}</span>
+    </div>
+    <div class="turn-chips">${chips}</div>
+  </div>`;
 }
 
 function eventCard(snap: Snapshot): string {
@@ -342,29 +408,54 @@ function eventCard(snap: Snapshot): string {
 
 function revealScene(snap: Snapshot): string {
   const me = snap.me;
+  const turn = snap.turn;
+
   if (!me.alive)
-    return `<div class="action-block"><h3>Вы наблюдаете</h3><p>Мёртвые не действуют, но могут читать и писать в канал мёртвых.</p></div>`;
-  if (me.revealedThisRound) {
+    return `<div class="action-block"><h3>Вы наблюдаете</h3>
+      <p>Мёртвые не действуют и не раскрывают карты. Смотрите, кто что показывает.</p>
+      ${turnStrip(snap)}</div>`;
+
+  // мой ход: сначала карта, потом подтверждение
+  if (turn && me.isMyTurn) {
     const last = me.traits.find((t) => t.revealed);
-    return `<div class="action-block"><h3>Ваша карта на столе</h3>
-      <p>${last ? `${esc(last.label)}: <b>${esc(last.value)}</b>` : ""}</p>
-      <p class="note">Ждём остальных — дальше начнётся обсуждение.</p></div>`;
-  }
-  const cards = me.traits
-    .map(
-      (t, i) => `
+    if (turn.stage === "confirm" || !me.canReveal) {
+      return `<div class="action-block">
+        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}</span>
+        <h3>Карта на столе</h3>
+        <p>${last ? `Все видят: <b>${esc(last.label)} — ${esc(last.value)}</b>.` : "Раскрывать больше нечего."}</p>
+        <p class="note">Подтвердите конец хода — очередь перейдёт к следующему выжившему.</p>
+        <button class="btn btn-primary end-turn-btn" data-on:click="@post('/act/end-turn', {retry: 'never'})">Завершить ход →</button>
+        ${turnStrip(snap)}
+      </div>`;
+    }
+    const cards = me.traits
+      .map(
+        (t, i) => `
       <button class="trait-card ${t.revealed ? "revealed" : ""}" ${t.revealed ? "disabled" : ""}
         data-on:click="@post('/act/reveal', {payload: {index: ${i}}, retry: 'never'})">
         <span class="trait-label">${esc(t.label)}</span>
         <span class="trait-value">${esc(t.value)}</span>
         <span class="trait-mark">${t.revealed ? "на столе" : "скрыто"}</span>
       </button>`,
-    )
-    .join("");
+      )
+      .join("");
+    return `<div class="action-block">
+        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}</span>
+        <h3>Покажите одну карту</h3>
+        <p>Один факт станет публичным навсегда. Выбирайте осторожно — потом подтвердите конец хода.</p>
+        <div class="trait-grid">${cards}</div>
+        ${turnStrip(snap)}
+      </div>`;
+  }
+
+  // чужой ход
+  const who = turn?.name || "следующий";
   return `<div class="action-block">
-      <h3>Покажите одну карту</h3>
-      <p>Один факт станет публичным навсегда. Выбирайте осторожно.</p>
-      <div class="trait-grid">${cards}</div>
+      <span class="eyebrow">РАСКРЫТИЕ · ${turn ? `${turn.index} / ${turn.total}` : ""}</span>
+      <h3>Сейчас ход: ${esc(who)}</h3>
+      <p>Выжившие открывают по одной карте по очереди. ${turn?.stage === "confirm" ? "Карта на столе — ждём подтверждения хода." : "Смотрите и запоминайте."}</p>
+      <p class="note">Свои карты всегда видны слева — их можно перечитать в любой момент.</p>
+      ${turnStrip(snap)}
     </div>`;
 }
 
@@ -681,7 +772,11 @@ export function renderBoard(snap: Snapshot, origin: string, tab = "day"): string
       <div class="lobby-chat-panel">${chatPanel(snap, tab)}</div>
     </main></div>`;
   }
-  return `<main id="board" class="game-grid">${playersPanel(snap)}${scene(snap)}${chatPanel(snap, tab)}</main>`;
+  return `<main id="board" class="game-grid">
+    <div class="side-column">${ownCards(snap)}${playersPanel(snap)}</div>
+    ${scene(snap)}
+    ${chatPanel(snap, tab)}
+  </main>`;
 }
 
 // Содержимое досье патчится отдельно: диалог живёт в оболочке, поэтому морфинг

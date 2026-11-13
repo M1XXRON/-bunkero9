@@ -209,6 +209,10 @@ const BOT_LINES = [
 
 const pick = (list: any[]): any => list[Math.floor(Math.random() * list.length)];
 
+// В комнате turn хранит order+index (без playerId — это поле снапшота).
+const turnId = (room: any): string | null =>
+  room.turn ? room.turn.order[room.turn.index] || null : null;
+
 // Ускоренные таймеры (BUNKER_TEST=1) идут по 0.7–0.9 с — боты должны успевать.
 const botDelay = () => (process.env.BUNKER_TEST === "1" ? 120 : 1200);
 
@@ -257,9 +261,17 @@ function botTurn(room: any, bot: any): void {
     return;
   }
 
-  if (room.state === "reveal" && !me.revealedThisRound) {
-    const index = me.traits.findIndex((t: any) => !t.revealed);
-    if (index >= 0) engine.revealTrait(room.code, me.id, index);
+  // Пошаговое раскрытие: бот действует только в свой ход — сначала карта,
+  // потом подтверждение хода.
+  if (room.state === "reveal") {
+    if (!room.turn || turnId(room) !== me.id) return;
+    if (room.turn.stage === "reveal" && !me.revealedThisRound) {
+      const index = me.traits.findIndex((t: any) => !t.revealed);
+      if (index >= 0) engine.revealTrait(room.code, me.id, index);
+      else engine.endTurn(room.code, me.id);
+      return;
+    }
+    if (room.turn.stage === "confirm") engine.endTurn(room.code, me.id);
     return;
   }
 
@@ -311,12 +323,21 @@ function driveBots(room: any): void {
     return;
   }
 
-  const key = `${room.gameId}:${room.state}:${room.day}`;
+  // В раскрытии ключ включает ход: иначе бот сходил бы один раз за фазу.
+  const key = `${room.gameId}:${room.state}:${room.day}:${room.turn?.index ?? ""}:${room.turn?.stage ?? ""}`;
   if (botPhase.get(room.code) === key) return;
   botPhase.set(room.code, key);
 
   const alive = bots.filter((p: any) => p.alive && !p.left);
-  alive.forEach((bot: any, i: number) => {
+  // В пошаговой фазе ходит ровно один — не будим остальных.
+  const currentId = room.state === "reveal" ? turnId(room) : null;
+  const actors = currentId ? alive.filter((bot: any) => bot.id === currentId) : alive;
+  // В пошаговой фазе ждёт только один бот — задержку не размазываем, иначе
+  // партия на 15 игроков ползёт по секунде на ход.
+  const isTest = process.env.BUNKER_TEST === "1";
+  const stepDelay = room.state === "reveal" ? (isTest ? 60 : 500) : botDelay();
+  const stagger = room.state === "reveal" ? 0 : isTest ? 40 : 500;
+  actors.forEach((bot: any, i: number) => {
     setTimeout(
       () => {
         try {
@@ -325,7 +346,7 @@ function driveBots(room: any): void {
           /* бот не должен ронять сервер */
         }
       },
-      botDelay() + i * (process.env.BUNKER_TEST === "1" ? 40 : 500),
+      stepDelay + i * stagger,
     ).unref?.();
   });
 }
@@ -580,6 +601,11 @@ async function handleAction(
       saveRoom(room);
       broadcast(room, origin);
       return done();
+    }
+    case "end-turn": {
+      // подтверждение конца хода при пошаговом раскрытии
+      const result = engine.endTurn(session.room, playerId);
+      return result?.ok === false ? fail(session, result.error) : done();
     }
     case "kick": {
       const result = engine.kickPlayer(session.room, playerId, String(payload.target));

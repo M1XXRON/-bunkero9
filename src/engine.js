@@ -112,6 +112,16 @@ function playerById(room, id) {
   return room.players.find((player) => player.id === id) || null;
 }
 
+// Длительность хода при пошаговом раскрытии: один игрок = один ход.
+// Это не длительность всей фазы — она переставляется на каждом ходе.
+const TURN_PACE = TEST_PACE
+  ? { normal: 1200, fast: 1200 }
+  : { normal: 25000, fast: 15000 };
+
+function turnMs(room) {
+  return TURN_PACE[room.settings?.pace] || TURN_PACE.normal;
+}
+
 function phaseMs(room, phase) {
   const pace = PACE[room.settings.pace] || PACE.normal;
   return pace[phase] || 30000;
@@ -214,7 +224,7 @@ function accelerate(room, ms) {
 // поэтому по текущей фазе заново выбираем функцию продолжения.
 const PHASE_TIMEOUTS = {
   intro: (room) => beginDay(room),
-  reveal: (room) => finishReveal(room),
+  reveal: (room) => revealTimeout(room),
   discussion: (room) => startVote(room),
   vote: (room) => resolveVote(room),
   night: (room) => resolveNight(room),
@@ -231,6 +241,20 @@ function resumeRoom(room) {
     disconnectedAt: player.disconnectedAt ?? Date.now(),
   }));
   if (room.state === 'lobby' || room.state === 'end') return room;
+  // старая комната (до пошагового раскрытия) или сброс после рестарта
+  if (room.state === 'reveal' && !room.turn) {
+    room.turn = {
+      order: alivePlayers(room).map((player) => player.id),
+      index: 0,
+      stage: 'reveal',
+    };
+  }
+  if (room.state === 'reveal' && room.turn) {
+    const current = turnPlayer(room);
+    if (current && !current.revealedThisRound && room.turn.stage !== 'confirm') {
+      room.turn.stage = current.traits.some((trait) => !trait.revealed) ? 'reveal' : 'confirm';
+    }
+  }
   const next = PHASE_TIMEOUTS[room.state];
   if (!next) return room;
   room.timeoutFn = () => next(room);
@@ -290,6 +314,62 @@ function checkRevealComplete(room) {
   if (alive.every((player) => player.revealedThisRound)) {
     accelerate(room, 1300);
   }
+}
+
+// ---------- пошаговое раскрытие ----------
+// room.turn = { order: [id...], index, stage: 'reveal' | 'confirm' | 'done' }
+// Игроки ходят строго по очереди: раскрыл карту -> подтвердил конец хода.
+
+function turnPlayer(room) {
+  const turn = room.turn;
+  if (!turn) return null;
+  const player = playerById(room, turn.order[turn.index] || '');
+  if (!player || !player.alive || player.left) return null;
+  return player;
+}
+
+// Ставит таймер на текущий ход и возвращает игрока, чей ход начался.
+function startTurn(room) {
+  const order = room.turn?.order || [];
+  let index = room.turn?.index ?? 0;
+  while (index < order.length) {
+    const player = playerById(room, order[index]);
+    if (player && player.alive && !player.left) {
+      const hidden = player.traits.some((trait) => !trait.revealed);
+      room.turn = {
+        order,
+        index,
+        stage: player.revealedThisRound || !hidden ? 'confirm' : 'reveal',
+      };
+      const ms = turnMs(room);
+      room.timeoutFn = () => revealTimeout(room);
+      room.phaseEndsAt = Date.now() + ms;
+      armTimer(room, ms);
+      return player;
+    }
+    index += 1;
+  }
+  room.turn = { order, index: order.length, stage: 'done' };
+  return null;
+}
+
+function advanceTurn(room) {
+  if (room.state !== 'reveal' || !room.turn) return;
+  room.turn.index += 1;
+  const next = startTurn(room);
+  if (next) {
+    changed(room);
+    return;
+  }
+  finishReveal(room);
+}
+
+// Ход истёк: карту раскрываем сами (случайную), ход передаём дальше.
+function revealTimeout(room) {
+  if (room.state !== 'reveal') return;
+  const player = turnPlayer(room);
+  if (player && !player.revealedThisRound) autoReveal(room, player);
+  advanceTurn(room);
 }
 
 function checkVoteComplete(room) {
@@ -398,12 +478,16 @@ function beginDay(room) {
   room.votes = {};
   room.night = null;
 
-  startPhase(room, 'reveal', phaseMs(room, 'reveal'), () => finishReveal(room));
-  system(room, `Раскрытие карт. Один факт о себе — для всех.`, 'phase');
-  if (alivePlayers(room).every((player) => player.revealedThisRound)) {
-    accelerate(room, 1500);
-  }
-  changed(room);
+  room.turn = {
+    order: alivePlayers(room).map((player) => player.id),
+    index: 0,
+    stage: 'reveal',
+  };
+  startPhase(room, 'reveal', turnMs(room), () => revealTimeout(room));
+  system(room, 'Раскрытие карт. По очереди: один факт о себе — для всех.', 'phase');
+  const first = startTurn(room);
+  if (first) changed(room);
+  else finishReveal(room);
 }
 
 function finishReveal(room) {
@@ -411,6 +495,7 @@ function finishReveal(room) {
   for (const player of alivePlayers(room)) {
     if (!player.revealedThisRound) autoReveal(room, player);
   }
+  room.turn = null;
   room.votes = {};
   startPhase(room, 'discussion', phaseMs(room, 'discussion'), () => startVote(room));
   system(room, 'Обсуждение. Слушайте. Сомневайтесь. Решайте.', 'phase');
@@ -591,6 +676,7 @@ function startGame(room, playerId) {
   room.winner = null;
   room.phaseEndsAt = null;
   room.phaseStartedAt = null;
+  room.turn = null;
 
   const total = room.players.length;
   const counts = roleCounts(total);
@@ -764,7 +850,8 @@ function leaveRoom(code, playerId) {
     }
     if (room.state === 'reveal') {
       player.revealedThisRound = true;
-      checkRevealComplete(room);
+      if (room.turn && turnPlayer(room)?.id === player.id) advanceTurn(room);
+      else checkRevealComplete(room);
     } else if (room.state === 'vote') {
       checkVoteComplete(room);
     } else if (room.state === 'night') {
@@ -836,14 +923,43 @@ function revealTrait(code, playerId, index) {
   if (room.state !== 'reveal') return { ok: false, error: 'Сейчас нельзя раскрывать карты.' };
   const player = playerById(room, playerId);
   if (!player || !player.alive) return { ok: false, error: 'Вы не участвуете в игре.' };
+  const current = turnPlayer(room);
+  if (!current) return { ok: false, error: 'Сейчас никто не раскрывает карты.' };
+  if (current.id !== player.id) return { ok: false, error: `Сейчас ход ${current.name}.` };
+  if (room.turn.stage !== 'reveal')
+    return { ok: false, error: 'Карта уже раскрыта — подтвердите конец хода.' };
   if (player.revealedThisRound) return { ok: false, error: 'Вы уже раскрыли карту в этот день.' };
   const trait = player.traits[Number(index)];
   if (!trait || trait.revealed) return { ok: false, error: 'Эта карта уже раскрыта.' };
   trait.revealed = true;
   player.revealedThisRound = true;
   system(room, `${player.name} раскрывает — ${trait.label}: ${trait.value}.`, 'reveal');
-  checkRevealComplete(room);
+  // карта на столе: ждём подтверждения, таймер хода начинается заново
+  room.turn.stage = 'confirm';
+  const ms = turnMs(room);
+  room.timeoutFn = () => revealTimeout(room);
+  room.phaseEndsAt = Date.now() + ms;
+  armTimer(room, ms);
   changed(room);
+  return { ok: true };
+}
+
+// Подтверждение конца хода: передаёт очередь следующему выжившему.
+function endTurn(code, playerId) {
+  const room = rooms.get(normalizeCode(code));
+  if (!room) return { ok: false, error: 'Бункер не найден.' };
+  if (room.state !== 'reveal') return { ok: false, error: 'Сейчас не этап раскрытия.' };
+  const player = playerById(room, playerId);
+  if (!player || !player.alive) return { ok: false, error: 'Вы наблюдаете со стороны.' };
+  const current = turnPlayer(room);
+  if (!current) return { ok: false, error: 'Очередь уже перешла дальше.' };
+  if (current.id !== player.id) return { ok: false, error: `Сейчас ход ${current.name}.` };
+  if (room.turn.stage === 'reveal') {
+    const hidden = player.traits.some((trait) => !trait.revealed);
+    if (hidden && !player.revealedThisRound)
+      return { ok: false, error: 'Сначала раскройте одну карту.' };
+  }
+  advanceTurn(room);
   return { ok: true };
 }
 
@@ -967,6 +1083,7 @@ function rematch(code, playerId) {
     player.lastHealTarget = null;
   });
   room.state = 'lobby';
+  room.turn = null;
   room.day = 0;
   room.event = null;
   room.usedEvents = [];
@@ -1039,6 +1156,32 @@ function serializeFor(room, viewer) {
       votesAgainst[targetId] = (votesAgainst[targetId] || 0) + 1;
     }
   }
+
+  const currentTurn = turnPlayer(room);
+  const turn =
+    room.state === 'reveal' && room.turn
+      ? {
+          playerId: currentTurn ? currentTurn.id : null,
+          name: currentTurn ? currentTurn.name : null,
+          stage: room.turn.stage,
+          index: Math.min(room.turn.index + 1, room.turn.order.length),
+          total: room.turn.order.length,
+          order: room.turn.order
+            .map((id, position) => {
+              const player = playerById(room, id);
+              if (!player) return null;
+              return {
+                id,
+                name: player.name,
+                alive: player.alive,
+                revealed: Boolean(player.revealedThisRound),
+                done: position < room.turn.index,
+                current: position === room.turn.index,
+              };
+            })
+            .filter(Boolean),
+        }
+      : null;
 
   const players = room.players.map((player) => {
     const visibleRole = isEnd || player.roleRevealed;
@@ -1122,7 +1265,14 @@ function serializeFor(room, viewer) {
       room.state === 'reveal' &&
       viewer.alive &&
       !viewer.revealedThisRound &&
-      myTraits.some((trait) => !trait.revealed),
+      myTraits.some((trait) => !trait.revealed) &&
+      turnPlayer(room)?.id === viewer.id &&
+      room.turn?.stage === 'reveal',
+    isMyTurn: room.state === 'reveal' && turnPlayer(room)?.id === viewer.id,
+    canEndTurn:
+      room.state === 'reveal' &&
+      turnPlayer(room)?.id === viewer.id &&
+      (viewer.revealedThisRound || !myTraits.some((trait) => !trait.revealed)),
     revealedThisRound: Boolean(viewer.revealedThisRound),
     votedFor: room.state === 'vote' ? room.votes[viewer.id] || null : null,
     lastHealTarget: viewer.role === 'doctor' ? room.lastHealTarget : null,
@@ -1152,6 +1302,7 @@ function serializeFor(room, viewer) {
     preview: room.state === 'lobby' ? roleCounts(room.players.length) : null,
     players,
     me,
+    turn,
     night,
     messages: messagesFor(room, viewer),
     winner: room.winner,
@@ -1223,6 +1374,7 @@ module.exports = {
   startGame,
   skipPhase,
   revealTrait,
+  endTurn,
   castVote,
   nightAction,
   doctorSkip,

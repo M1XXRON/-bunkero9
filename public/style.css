@@ -1672,16 +1672,7 @@ button {
   .game-grid > .panel {
     overflow: visible;
   }
-  .scene-panel {
-    order: 1;
-  }
-  .chat-panel {
-    order: 2;
-    min-height: 380px;
-  }
-  .players-panel {
-    order: 3;
-  }
+
   .players-list,
   .lobby-players {
     overflow: visible;
@@ -2019,5 +2010,197 @@ body.landing {
   }
   .landing-card {
     padding: 20px;
+  }
+}
+
+/* ---------- свои карты и очередь раскрытия ---------- */
+
+.side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.own-panel {
+  flex: 0 0 auto;
+  padding: 18px 20px 16px;
+}
+
+.own-panel .panel-head {
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.own-panel .panel-head h2 {
+  font-size: 19px;
+  margin-top: 4px;
+}
+
+.own-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.own-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "cat mark"
+    "value mark";
+  align-items: center;
+  column-gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.own-card:last-child {
+  border-bottom: 0;
+}
+
+.own-cat {
+  grid-area: cat;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.own-value {
+  grid-area: value;
+  font-size: 13px;
+  color: #fff;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.own-mark {
+  grid-area: mark;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #3d3d3d;
+  white-space: nowrap;
+}
+
+.own-card.revealed .own-value {
+  color: var(--muted);
+}
+
+.own-card.revealed .own-mark {
+  color: var(--accent);
+}
+
+/* отметка того, чей ход, в списке выживших */
+.players-row.current-turn {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* полоса очереди */
+.turn-strip {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.turn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.turn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.turn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--card-2);
+  color: var(--faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.turn-chip b {
+  color: var(--ok);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.turn-chip.done {
+  color: var(--dim);
+}
+
+.turn-chip.current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #fff;
+}
+
+.turn-chip.dead {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.turn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: turn-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes turn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+.turn-eyebrow {
+  color: var(--accent);
+}
+
+.end-turn-btn {
+  margin-top: 18px;
+}
+
+@media (max-width: 1040px) {
+  /* на телефоне разбираем боковую колонку: свои карты — сразу под сценой,
+     чат — перед длинным списком выживших */
+  .side-column {
+    display: contents;
+  }
+  .scene-panel {
+    order: 1;
+  }
+  .own-panel {
+    order: 2;
+  }
+  .chat-panel {
+    order: 3;
+    min-height: 380px;
+  }
+  .players-panel {
+    order: 4;
   }
 }

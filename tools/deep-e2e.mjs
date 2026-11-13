@@ -209,10 +209,25 @@ async function main() {
       sawReveal = true;
       const cards = await evaluate("document.querySelectorAll('.trait-card').length");
       note(cards > 0, `раскрытие: карт отрисовано (${cards})`);
+      const ownCards = await evaluate("document.querySelectorAll('.own-card').length");
+      note(ownCards === 5, `свои карты всегда на экране (${ownCards})`);
+      const queue = await evaluate("document.querySelectorAll('.turn-chip').length");
+      note(queue >= 5, `очередь раскрытия видна (${queue})`);
       await evaluate("document.querySelector('.trait-card').click()");
       await sleep(1200);
       const body = await text("document.body.innerText");
-      note(/Ваша карта на столе|НА СТОЛЕ|на столе/i.test(body), "раскрытие: карта ушла на стол");
+      note(/Карта на столе|на столе/i.test(body), "раскрытие: карта ушла на стол");
+      const endTurn = await evaluate("!!document.querySelector('.end-turn-btn')");
+      note(endTurn, "раскрытие: есть кнопка «Завершить ход»");
+      if (endTurn) {
+        await evaluate("document.querySelector('.end-turn-btn').click()");
+        await sleep(1200);
+        const after = await text('(document.querySelector(".action-block")||{}).innerText || ""');
+        note(
+          /Сейчас ход|Покажите одну карту/.test(after) && !/Завершить ход/.test(after),
+          `подтверждение хода передало очередь (${after.slice(0, 40)}…)`,
+        );
+      }
       break;
     }
     await evaluate(
