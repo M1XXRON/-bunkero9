@@ -6,15 +6,15 @@
   "scripts": {
     "start": "bun run server.ts",
     "dev": "bun --watch run server.ts",
-    "check": "bun check --no-script",
-    "fmt": "bun fmt --no-script server.ts src/render.ts test tools deploy public/style.css README.md",
-    "fmt:check": "bun fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md",
-    "verify": "bun check --no-script && bun fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md && node test/sim-bun.mjs",
+    "check": "bun check",
+    "fmt": "bun fmt",
+    "fmt:check": "bun fmt --check",
+    "verify": "bun check && bun fmt --check && node test/sim-bun.mjs",
     "test": "node test/sim-bun.mjs",
     "test:15": "BOTS=15 node test/sim-bun.mjs",
     "build": "bun build ./server.ts --compile --bytecode --target=bun-linux-x64 --outfile dist/bunker9",
-    "start:bin": "./dist/bunker9",
-    "build:local": "bun build ./server.ts --compile --bytecode --outfile dist/bunker9-local"
+    "build:local": "bun build ./server.ts --compile --bytecode --outfile dist/bunker9-local",
+    "start:bin": "./dist/bunker9"
   },
   "dependencies": {},
   "devDependencies": {

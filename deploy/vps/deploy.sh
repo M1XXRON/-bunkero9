@@ -20,8 +20,8 @@ echo "· сервер: $USER_AT"
 
 if [ "${SKIP_VERIFY:-0}" != "1" ]; then
 	echo "· проверки перед выкладкой (bun check + fmt + тесты)"
-	~/.bun/bin/bun check --no-script || { echo "  типы не прошли — деплой остановлен"; exit 1; }
-	~/.bun/bin/bun fmt --check --no-script server.ts src/render.ts test tools deploy public/style.css README.md || { echo "  формат не прошёл — деплой остановлен"; exit 1; }
+	~/.bun/bin/bun check || { echo "  типы не прошли — деплой остановлен"; exit 1; }
+	~/.bun/bin/bun fmt --check || { echo "  формат не прошёл — деплой остановлен"; exit 1; }
 	node test/sim-bun.mjs || { echo "  тесты не прошли — деплой остановлен"; exit 1; }
 fi
 

@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 coverage/
+public/vendor/
+src/engine.js
+src/content.js

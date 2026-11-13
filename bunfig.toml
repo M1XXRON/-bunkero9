@@ -1,9 +1,7 @@
-# Стиль форматтера
 [fmt]
 printWidth = 100
 semi = true
 singleQuote = false
 
 # bun не добавляет свой каталог в PATH для package.json-скриптов,
-# поэтому держим ссылку в node_modules/.bin — Bun prepend-ит её к PATH сам.
-# `bun install` её не пересоздаёт, так как bin-линки делаются только из пакетов.
+# поэтому держим симлинк node_modules/.bin/bun (Bun prepend-ит .bin к PATH сам).
