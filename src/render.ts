@@ -17,7 +17,13 @@ export type Player = {
   isHost: boolean;
   death: { day: number; cause: string; note?: string } | null;
   traits: { cat: string; label: string; value: string }[];
-  traitSlots: { cat: string; label: string; revealed: boolean; value: string | null }[];
+  traitSlots: {
+    cat: string;
+    label: string;
+    revealed: boolean;
+    value: string | null;
+    effect?: string | null;
+  }[];
   traitsRevealed: number;
   spokeToday: boolean;
   totalTraits: number;
@@ -40,7 +46,7 @@ export type Snapshot = {
     avatarIndex: number;
     isHost: boolean;
     alive: boolean;
-    traits: { cat: string; label: string; value: string; revealed: boolean }[];
+    traits: { cat: string; label: string; value: string; revealed: boolean; effect?: string }[];
     canReveal: boolean;
     isMyTurn: boolean;
     canEndTurn: boolean;
@@ -310,7 +316,9 @@ function peekCard(p: Player): string {
       slot.revealed
         ? `<div class="peek-row on">
             <span class="peek-cat">${esc(slot.label)}</span>
-            <span class="peek-val">${esc(slot.value || "—")}</span>
+            <span class="peek-val">${esc(slot.value || "—")}${
+              slot.effect ? `<i class="peek-eff">${esc(slot.effect)}</i>` : ""
+            }</span>
             <span class="peek-ico">${CHECK_ICON}</span>
           </div>`
         : `<div class="peek-row">
@@ -384,6 +392,7 @@ function ownCards(snap: Snapshot): string {
         <span class="own-cat">${esc(t.label)}</span>
         <span class="own-value">${esc(t.value)}</span>
         <span class="own-mark">${t.revealed ? "на столе" : "скрыта"}</span>
+        ${t.effect ? `<span class="own-eff">${esc(t.effect)}</span>` : ""}
       </div>`,
     )
     .join("");
@@ -474,6 +483,7 @@ function revealScene(snap: Snapshot): string {
         data-on:click="@post('/act/reveal', {payload: {index: ${i}}, retry: 'never'})">
         <span class="trait-label">${esc(t.label)}</span>
         <span class="trait-value">${esc(t.value)}</span>
+        ${t.effect ? `<span class="trait-eff">${esc(t.effect)}</span>` : ""}
         <span class="trait-mark">${t.revealed ? "на столе" : "скрыто"}</span>
       </button>`,
       )

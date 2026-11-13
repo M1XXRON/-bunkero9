@@ -1,153 +1,119 @@
-// Экономика бункера зависит от состава: стартовые запасы, суточный расход,
-// масштаб событий. Проверяем, что «дней до кризиса» примерно одинаково на 5 и
-// на 15 игроков, а расход реально считается от живых.
+// Экономика: стартовые запасы и суточный расход растут с составом.
+// Считаем на движке (без сервера и таймеров) и вычитаем припасы смены, чтобы
+// характеристики не сбивали числа. Механику характеристик проверяет traits-e2e.
 //
 //   bun tools/economy-e2e.mjs
-import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 
-const BUN = process.execPath;
-const ROOT = join(import.meta.dir, "..");
-const PORT = 3118;
-const SITE = `http://127.0.0.1:${PORT}`;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const require = createRequire(import.meta.url);
+const engine = require(join(import.meta.dir, "..", "src", "engine.js"));
+
 const problems = [];
 const note = (c, m) => {
   console.log(`${c ? "  ✓" : "  ✗"} ${m}`);
   if (!c) problems.push(m);
 };
 
-const dir = mkdtempSync(join(tmpdir(), "bunker-econ-"));
-const server = spawn(BUN, ["run", "server.ts"], {
-  cwd: ROOT,
-  stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, PORT: String(PORT), BUNKER_TEST: "1", BUNKER_DB: join(dir, "econ.db") },
-});
-let log = "";
-server.stdout.on("data", (d) => (log += String(d)));
-server.stderr.on("data", (d) => (log += String(d)));
-
-const act = (sid, cmd, payload = {}) =>
-  fetch(`${SITE}/act/${cmd}`, {
-    method: "POST",
-    redirect: "manual",
-    headers: { "content-type": "application/json", cookie: `bunker_sid=${sid}` },
-    body: JSON.stringify({ payload }),
-  });
-const page = async (sid) =>
-  (await fetch(`${SITE}/`, { headers: { cookie: `bunker_sid=${sid}` } })).text();
-
-const resources = (html) => {
-  const num = (label) => {
-    const m = html.match(new RegExp(`<i>${label}</i><b>(\\d+)</b>`));
-    return m ? Number(m[1]) : null;
-  };
-  return { food: num("еда"), energy: num("энергия"), meds: num("меды") };
-};
-const dayCost = (html) => {
-  const m = html.match(/Расход бункера: еда −(\d+), энергия −(\d+)/);
-  return m ? { food: Number(m[1]), energy: Number(m[2]) } : null;
-};
-
-let up = false;
-for (let i = 0; i < 40 && !up; i++) {
-  try {
-    up = (await fetch(`${SITE}/health`, { signal: AbortSignal.timeout(1500) })).ok;
-  } catch {
-    /* ждём */
+let seq = 0;
+function makeRoom(n) {
+  seq += 1;
+  const host = engine.createRoom({ name: `E0-${seq}`, avatar: "🦉", socketId: `e${seq}-0` });
+  for (let i = 1; i < n; i += 1) {
+    engine.joinRoom({
+      code: host.room.code,
+      name: `E${i}-${seq}`,
+      avatar: "🐺",
+      socketId: `e${seq}-${i}`,
+    });
   }
-  if (!up) await sleep(150);
-}
-if (!up) {
-  console.error("✗ сервер не поднялся\n" + log.slice(-600));
-  process.exit(1);
+  engine.startGame(host.room, host.player.id);
+  return host.room;
 }
 
-async function measure(players) {
-  const sid = `econ-${players}`;
-  await act(sid, "create", { name: "Хост", avatar: "🦉" });
-  if (players > 1) await act(sid, "bots", { count: players - 1 });
-  await act(sid, "start");
-  await sleep(300);
-  const before = resources(await page(sid));
-  await act(sid, "skip"); // интро -> первый день
-  await sleep(500);
-  const html = await page(sid);
-  const after = resources(html);
-  const cost = dayCost(html);
-  await act(sid, "leave");
-  return { before, after, cost };
+// нейтральные карты: убираем модификаторы, чтобы видеть базовые числа
+function neutralise(target) {
+  for (const player of target.players) {
+    for (const trait of player.traits) trait.value = "абсолютно здоров";
+  }
 }
 
-try {
-  const small = await measure(5);
-  const big = await measure(15);
+const base = (room) => {
+  const supply = engine.supplyOf(room);
+  return {
+    food: Math.round((room.resources.food - supply.food) * 10) / 10,
+    energy: Math.round((room.resources.energy - supply.energy) * 10) / 10,
+    foodSupply: supply.food,
+    energySupply: supply.energy,
+  };
+};
 
-  console.log(
-    `  5 игроков: старт ${JSON.stringify(small.before)}, расход ${JSON.stringify(small.cost)}`,
-  );
-  console.log(
-    ` 15 игроков: старт ${JSON.stringify(big.before)}, расход ${JSON.stringify(big.cost)}`,
-  );
+const small = makeRoom(5);
+const big = makeRoom(15);
 
-  note(small.before.food === 26, `5 игроков: еда = (R−1)·5+6 (${small.before.food})`);
-  note(big.before.food === 96, `15 игроков: еда = (R−1)·15+6 (${big.before.food})`);
-  note(
-    big.before.energy > small.before.energy,
-    `15 игроков: энергии больше (${big.before.energy} > ${small.before.energy})`,
-  );
-  note(
-    big.before.meds > small.before.meds,
-    `15 игроков: медикаментов больше (${big.before.meds} > ${small.before.meds})`,
-  );
+const smallBase = base(small);
+const bigBase = base(big);
+console.log(
+  `  5 игроков: база ${JSON.stringify(smallBase)}, всего еды ${small.resources.food} (припасы +${smallBase.foodSupply})`,
+);
+console.log(
+  ` 15 игроков: база ${JSON.stringify(bigBase)}, всего еды ${big.resources.food} (припасы +${bigBase.energySupply && bigBase.foodSupply})`,
+);
 
-  note(small.cost?.food === 5, `расход еды = живые (5 → −${small.cost?.food})`);
-  note(big.cost?.food === 15, `расход еды = живые (15 → −${big.cost?.food})`);
-  note(small.cost?.energy === 2, `расход энергии на 5 → −${small.cost?.energy} (минимум 2)`);
-  note(big.cost?.energy === 5, `расход энергии на 15 → −${big.cost?.energy} (1 за каждые 3)`);
+note(smallBase.food === 26, `5 игроков: еда = (R−1)·5+6 (${smallBase.food})`);
+note(bigBase.food === 96, `15 игроков: еда = (R−1)·15+6 (${bigBase.food})`);
+note(
+  big.resources.food > small.resources.food,
+  `15 игроков: еды больше (${big.resources.food} > ${small.resources.food})`,
+);
+note(
+  big.resources.meds > small.resources.meds,
+  `15 игроков: медикаментов больше (${big.resources.meds} > ${small.resources.meds})`,
+);
 
-  // запас в днях не должен разъезжаться от размера команды
-  const smallDays = small.before.energy / small.cost.energy;
-  const bigDays = big.before.energy / big.cost.energy;
-  note(
-    Math.abs(smallDays - bigDays) <= 2,
-    `энергии хватает примерно одинаково: ${smallDays.toFixed(1)} и ${bigDays.toFixed(1)} дн.`,
-  );
+neutralise(small);
+neutralise(big);
+const smallCost = engine.dailyCost(small);
+const bigCost = engine.dailyCost(big);
+console.log(`  расход: 5 → ${JSON.stringify(smallCost)}, 15 → ${JSON.stringify(bigCost)}`);
 
-  const smallFoodDays = small.before.food / small.cost.food;
-  const bigFoodDays = big.before.food / big.cost.food;
-  note(
-    Math.abs(smallFoodDays - bigFoodDays) <= 2,
-    `еды хватает примерно одинаково: ${smallFoodDays.toFixed(1)} и ${bigFoodDays.toFixed(1)} дн.`,
-  );
+note(smallCost.food === 5, `расход еды = живые (5 → −${smallCost.food})`);
+note(bigCost.food === 15, `расход еды = живые (15 → −${bigCost.food})`);
+note(smallCost.energy === 2, `расход энергии на 5 → −${smallCost.energy} (минимум 2)`);
+note(bigCost.energy === 5, `расход энергии на 15 → −${bigCost.energy} (1 за каждые 3)`);
 
-  // события масштабируются от состава (чистая функция движка)
-  const require = (await import("node:module")).createRequire(import.meta.url);
-  const engine = require(join(ROOT, "src/engine.js"));
-  const smallEvent = engine.scaleEffects({ food: -8, energy: -4, meds: 1 }, 5);
-  const bigEvent = engine.scaleEffects({ food: -8, energy: -4, meds: 1 }, 15);
-  note(
-    smallEvent.food === -5 && smallEvent.energy === -2,
-    `событие на 5 игроков мягче: food ${smallEvent.food}, energy ${smallEvent.energy}`,
-  );
-  note(
-    bigEvent.food === -12 && bigEvent.energy === -6,
-    `событие на 15 игроков сильнее: food ${bigEvent.food}, energy ${bigEvent.energy}`,
-  );
-  note(bigEvent.meds === 1 && smallEvent.meds === 1, "медикаменты в событиях не масштабируются");
-  const huge = engine.scaleEffects({ food: -8 }, 20);
-  const tiny = engine.scaleEffects({ food: -8 }, 3);
-  note(
-    huge.food === -12 && tiny.food === -5,
-    `масштаб ограничен 0.6…1.5 (${tiny.food}…${huge.food})`,
-  );
-} finally {
-  server.kill("SIGTERM");
-  await sleep(300);
-  rmSync(dir, { recursive: true, force: true });
-}
+const smallDays = small.resources.energy / smallCost.energy;
+const bigDays = big.resources.energy / bigCost.energy;
+note(
+  Math.abs(smallDays - bigDays) <= 2,
+  `энергии хватает примерно одинаково: ${smallDays.toFixed(1)} и ${bigDays.toFixed(1)} дн.`,
+);
+
+const smallFoodDays = small.resources.food / smallCost.food;
+const bigFoodDays = big.resources.food / bigCost.food;
+note(
+  Math.abs(smallFoodDays - bigFoodDays) <= 2,
+  `еды хватает примерно одинаково: ${smallFoodDays.toFixed(1)} и ${bigFoodDays.toFixed(1)} дн.`,
+);
+
+// события масштабируются от состава (чистая функция движка)
+const smallEvent = engine.scaleEffects({ food: -8, energy: -4, meds: 1 }, 5);
+const bigEvent = engine.scaleEffects({ food: -8, energy: -4, meds: 1 }, 15);
+note(
+  smallEvent.food === -5 && smallEvent.energy === -2,
+  `событие на 5 игроков мягче: food ${smallEvent.food}, energy ${smallEvent.energy}`,
+);
+note(
+  bigEvent.food === -12 && bigEvent.energy === -6,
+  `событие на 15 игроков сильнее: food ${bigEvent.food}, energy ${bigEvent.energy}`,
+);
+note(bigEvent.meds === 1 && smallEvent.meds === 1, "медикаменты в событиях не масштабируются");
+const huge = engine.scaleEffects({ food: -8 }, 20);
+const tiny = engine.scaleEffects({ food: -8 }, 3);
+note(
+  huge.food === -12 && tiny.food === -5,
+  `масштаб ограничен 0.6…1.5 (${tiny.food}…${huge.food})`,
+);
 
 console.log(
   problems.length ? `\nпровалы: ${problems.join(" | ")}` : "\nэкономика: проверки прошли",

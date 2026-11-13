@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { AVATARS, TRAITS, EVENTS, ENDINGS, SCENARIOS } = require('./content');
+const { AVATARS, TRAITS, EVENTS, ENDINGS, SCENARIOS, TRAIT_EFFECTS } = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -34,6 +34,57 @@ const FOOD_PER_PLAYER = 4;
 const FOOD_DAYS = 8;
 const ENERGY_PER_PLAYER = 3;
 const ENERGY_DAYS = 6;
+
+const round1 = (value) => Math.round(value * 10) / 10;
+
+// Эффект характеристики по её значению («повар», «ящик консервов», …).
+function effectOf(value) {
+  return TRAIT_EFFECTS[String(value || '').toLowerCase()] || null;
+}
+
+function playerEffectText(trait) {
+  const effect = effectOf(trait?.value);
+  return effect ? effect.label || '' : '';
+}
+
+// Суточный расход с учётом живых носителей: повар кормит смену дешевле,
+// аллергия добавляет личную норму, электрик экономит энергию.
+function dailyCost(room) {
+  const alive = alivePlayers(room);
+  const count = Math.max(1, alive.length);
+  let crewEat = 0;
+  let crewPower = 0;
+  let personalEat = 0;
+  for (const player of alive) {
+    for (const trait of player.traits) {
+      const effect = effectOf(trait.value);
+      if (!effect) continue;
+      if (effect.crewEat) crewEat += effect.crewEat;
+      if (effect.crewPower) crewPower += effect.crewPower;
+      if (effect.eat) personalEat += effect.eat;
+    }
+  }
+  const perPerson = Math.max(0.25, 1 + crewEat);
+  const food = Math.max(0, count * perPerson + personalEat);
+  const basePower = Math.max(2, Math.ceil(count / ENERGY_PER_PLAYER));
+  const energy = Math.max(1, basePower + crewPower);
+  return { food: round1(food), energy: round1(energy), crewEat, crewPower, personalEat };
+}
+
+// Разовые припасы: что смена принесла с собой (считаем до старта, по всем картам).
+function supplyOf(room) {
+  const supply = { food: 0, energy: 0, meds: 0 };
+  for (const player of room.players) {
+    for (const trait of player.traits) {
+      const effect = effectOf(trait.value);
+      if (!effect?.supply) continue;
+      supply.food += effect.supply.food || 0;
+      supply.energy += effect.supply.energy || 0;
+      supply.meds += effect.supply.meds || 0;
+    }
+  }
+  return supply;
+}
 
 function energyCost(room) {
   const alive = alivePlayers(room).length || 1;
@@ -516,13 +567,22 @@ function beginDay(room) {
   }
 
   system(room, `ДЕНЬ ${room.day}`, 'phase');
-  const foodCost = alive.length;
-  const powerCost = energyCost(room);
-  room.resources.food = Math.max(0, room.resources.food - foodCost);
-  room.resources.energy = Math.max(0, room.resources.energy - powerCost);
+  const cost = dailyCost(room);
+  const foodCost = cost.food;
+  const powerCost = cost.energy;
+  room.resources.food = round1(Math.max(0, room.resources.food - foodCost));
+  room.resources.energy = round1(Math.max(0, room.resources.energy - powerCost));
+  const signed = (value) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(round1(value))}`;
+  const modifiers = [
+    cost.crewEat ? `повар: ${signed(cost.crewEat)} на человека` : '',
+    cost.personalEat ? `личные нормы ${signed(cost.personalEat)}` : '',
+    cost.crewPower ? `электрик: ${signed(cost.crewPower)} к энергии` : '',
+  ].filter(Boolean);
   system(
     room,
-    `Расход бункера: еда −${foodCost}, энергия −${powerCost} (${alive.length} выживших).`,
+    `Расход бункера: еда −${foodCost}, энергия −${powerCost} (${alive.length} выживших${
+      modifiers.length ? ` · ${modifiers.join(' · ')}` : ''
+    }).`,
     'muted',
   );
 
@@ -777,6 +837,18 @@ function startGame(room, playerId, options = {}) {
     }));
   });
 
+  const supply = supplyOf(room);
+  room.resources.food += supply.food;
+  room.resources.energy += supply.energy;
+  room.resources.meds += supply.meds;
+  if (supply.food || supply.energy || supply.meds) {
+    const parts = [
+      supply.food ? `еда +${supply.food}` : '',
+      supply.energy ? `энергия +${supply.energy}` : '',
+      supply.meds ? `медикаменты +${supply.meds}` : '',
+    ].filter(Boolean);
+    system(room, `Припасы смены: ${parts.join(', ')}.`, 'good');
+  }
   system(room, 'СИГНАЛ ТИШИНЫ', 'title');
   system(room, room.story.title, 'title');
   system(room, room.story.premise, 'info');
@@ -1307,6 +1379,7 @@ function serializeFor(room, viewer) {
           label: category.label,
           revealed: isRevealed,
           value: isRevealed && trait ? trait.value : null,
+          effect: isRevealed && trait ? playerEffectText(trait) : null,
         };
       }),
       traitsRevealed: revealedTraits.length,
@@ -1323,6 +1396,7 @@ function serializeFor(room, viewer) {
     label: trait.label,
     value: trait.value,
     revealed: trait.revealed,
+    effect: playerEffectText(trait),
   }));
   const me = {
     id: viewer.id,
@@ -1441,8 +1515,10 @@ module.exports = {
   skipPhase,
   revealTrait,
   endTurn,
-  // чистые помощники — для тестов экономики
+  // чистые помощники — для тестов экономики и характеристик
   scaleEffects,
+  dailyCost,
+  supplyOf,
   castVote,
   sendChat,
   rematch,
