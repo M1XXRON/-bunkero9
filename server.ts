@@ -44,6 +44,10 @@ function sidOf(req: Request): string {
   return jar.get("bunker_sid") ?? "";
 }
 
+// Брошенные комнаты: в прежнем сервере engine.cleanupRooms() крутился
+// по таймеру, при переносе на Bun вызов потеряли — комнаты копились в памяти.
+setInterval(() => engine.cleanupRooms(), 30_000);
+
 // Сессии без комнаты и закрытые потоки копятся — подчищаем раз в 10 минут.
 setInterval(
   () => {

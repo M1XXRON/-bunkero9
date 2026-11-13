@@ -1,5 +1,5 @@
 // Снимок нового UI (Bun+Datastar) в двух размерах: десктоп и телефон.
-//   SITE=https://next.bunker9.lol node tools/shot-new.mjs
+//   SITE=https://next.bunker9.lol bun tools/shot-new.mjs
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import os from "node:os";
