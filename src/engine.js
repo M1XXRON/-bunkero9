@@ -51,6 +51,8 @@ function scaleEffects(effects, total) {
   return scaled;
 }
 const CHAT_LIMIT = 160;
+const CHAT_TEXT_MAX = 200;
+const CHAT_COOLDOWN_MS = 350;
 
 const TEST_PACE = process.env.BUNKER_TEST === '1';
 const PACE = TEST_PACE
@@ -120,18 +122,18 @@ function cleanChat(raw) {
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 240);
+    .slice(0, CHAT_TEXT_MAX);
 }
 
 function normalizeCode(raw) {
   return typeof raw === 'string' ? raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) : '';
 }
 
+// Число заражённых. Держим правило «запас людей не меньше, чем нужно точных
+// изгнаний»: I ≤ (N−1)/3, иначе партия решается одной ошибкой (было: на 6
+// игроков 2 заражённых при запасе в 2 смерти — почти невыигрышно для людей).
 function infectedCount(total) {
-  if (total >= 13) return 4;
-  if (total >= 10) return 3;
-  if (total >= 6) return 2;
-  return 1;
+  return Math.max(1, Math.floor((total - 1) / 3));
 }
 
 function roleCounts(total) {
@@ -299,8 +301,9 @@ function resumeRoom(room) {
   room.players = (room.players || []).map((player) => ({
     ...player,
     socketId: null,
-    connected: false,
-    disconnectedAt: player.disconnectedAt ?? Date.now(),
+    // боту лента не нужна: он не «отваливается» вместе с людьми
+    connected: Boolean(player.isBot),
+    disconnectedAt: player.isBot ? null : (player.disconnectedAt ?? Date.now()),
   }));
   if (room.state === 'lobby' || room.state === 'end') return room;
   // старая комната (до пошагового раскрытия) или сброс после рестарта
@@ -364,6 +367,13 @@ function removePlayer(room, player, cause, note) {
   player.alive = false;
   player.roleRevealed = true;
   player.death = { day: room.day, cause, note: note || null };
+  // Мёртвый хост не должен распоряжаться темпом: передаём живому человеку,
+  // если людей нет — любому живому.
+  if (room.hostId === player.id) {
+    const alive = alivePlayers(room).filter((item) => !item.left);
+    const next = alive.find((item) => !item.isBot) || alive[0] || null;
+    room.hostId = next ? next.id : null;
+  }
   const prefix = cause === 'exile' ? 'Изгнание' : cause === 'night' ? 'Ночная потеря' : cause === 'left' ? 'Выход' : 'Кризис';
   const tone = cause === 'exile' && player.role === 'infected' ? 'good' : 'bad';
   const reason = cause === 'crisis' && note ? ` Причина — ${note}.` : '';
@@ -863,6 +873,13 @@ function joinRoom({ code, name, avatar, token, socketId }) {
   if (room.state !== 'lobby') {
     return { ok: false, error: 'Игра уже началась. Войти можно только по сохранённой сессии.' };
   }
+  const wanted = cleanName(name);
+  if (
+    wanted &&
+    room.players.some((player) => player.name.toLowerCase() === wanted.toLowerCase())
+  ) {
+    return { ok: false, error: 'Такой позывной уже занят в этом бункере.' };
+  }
   if (room.players.length >= MAX_PLAYERS) {
     return { ok: false, error: `В бункере уже ${MAX_PLAYERS} выживших.` };
   }
@@ -1044,6 +1061,7 @@ function castVote(code, playerId, targetId) {
   if (targetId !== 'skip') {
     const target = playerById(room, targetId);
     if (!target || !target.alive) return { ok: false, error: 'Этот выживший уже не с нами.' };
+    if (target.id === player.id) return { ok: false, error: 'За себя голосовать нельзя.' };
   }
   room.votes[player.id] = targetId;
   checkVoteComplete(room);
@@ -1107,6 +1125,12 @@ function sendChat(code, playerId, channel, text) {
   if (!clean) return { ok: false, error: 'Пустое сообщение.' };
   const allowed = chatAvailability(room, player);
   if (!allowed[channel]) return { ok: false, error: 'Сейчас этот канал недоступен.' };
+  // Антифлуд: удержанный Enter не должен заливать ленту.
+  const now = Date.now();
+  if (player.lastChatAt && now - player.lastChatAt < CHAT_COOLDOWN_MS) {
+    return { ok: false, error: 'Не так быстро — дайте остальным прочитать.' };
+  }
+  player.lastChatAt = now;
   chat(room, player, channel, clean);
   changed(room);
   return { ok: true };

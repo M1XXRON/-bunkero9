@@ -2812,3 +2812,13 @@ body.landing {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 }
+
+/* своя карточка на голосовании: видна, но не кликается */
+.target-card.self {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.target-card.self .target-meta {
+  color: #4a4a4a;
+}

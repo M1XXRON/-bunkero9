@@ -348,7 +348,7 @@ async function main() {
     const phase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
     if (phase.includes("ГОЛОСОВАНИЕ")) {
       await evaluate(
-        '[...document.querySelectorAll(".target-card")].find((c) => !c.classList.contains("selected"))?.click()',
+        '[...document.querySelectorAll(".target-card:not(.self)")].find((c) => !c.classList.contains("selected"))?.click()',
       );
       await sleep(900);
       const selected = await evaluate("document.querySelectorAll('.target-card.selected').length");

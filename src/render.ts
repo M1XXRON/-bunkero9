@@ -523,16 +523,23 @@ function voteScene(snap: Snapshot): string {
     ? `Ждут голоса: ${esc(waiters.length <= 3 ? waiters.join(", ") : `${waiters.slice(0, 3).join(", ")} и ещё ${waiters.length - 3}`)}`
     : "Все голоса собраны · хост может закрыть голосование";
   const cards = alive
-    .map(
-      (p) => `
+    .map((p) => {
+      // за себя голосовать нельзя — показываем карточку, но не кнопкой
+      if (p.id === me.id)
+        return `<div class="target-card self" title="За себя голосовать нельзя">
+          ${avatar(p, "xs")}
+          <span class="target-name">${esc(p.name)} · вы</span>
+          <span class="target-meta">за себя нельзя</span>
+        </div>`;
+      return `
       <button class="target-card ${me.votedFor === p.id ? "selected" : ""}"
         data-on:click="@post('/act/vote', {payload: {target: '${p.id}'}, retry: 'never'})">
         ${avatar(p, "xs")}
-        <span class="target-name">${esc(p.name)}${p.id === me.id ? " · вы" : ""}</span>
+        <span class="target-name">${esc(p.name)}</span>
         <span class="target-meta">${p.traitsRevealed}/${p.totalTraits} карт</span>
         <span class="target-votes ${p.votesAgainst ? "" : "zero"}">${p.votesAgainst}</span>
-      </button>`,
-    )
+      </button>`;
+    })
     .join("");
   return `<div class="action-block">
       <h3>Кого изгнать?</h3>
