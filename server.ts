@@ -483,6 +483,22 @@ async function aiRecap(room: any): Promise<void> {
   }
 }
 
+async function aiPersonas(room: any): Promise<void> {
+  const key = `${room.code}:personas`;
+  if (aiBusy.has(key)) return;
+  aiBusy.add(key);
+  const roster = room.players.map((p: any) => p.name);
+  try {
+    const list = await generatePersonas(roster, CATASTROPHE);
+    if (engine.rooms.get(room.code) !== room) return;
+    if (room.state !== "lobby" || room.players.length !== roster.length) return;
+    room.personas = { forCount: roster.length, list };
+    saveRoom(room);
+  } finally {
+    aiBusy.delete(key);
+  }
+}
+
 async function aiNextEvent(room: any): Promise<void> {
   const key = `${room.code}:event`;
   if (aiBusy.has(key)) return;
@@ -506,6 +522,9 @@ async function aiNextEvent(room: any): Promise<void> {
   }
 }
 
+const CATASTROPHE =
+  "техногенная катастрофа: воздух наверху отравлен, выход из бункера заблокирован";
+
 function scheduleAi(room: any): void {
   // Разбор показываем всегда: без ключа — сухая сводка из лога, с моделью —
   // она заменит её, как только ответит.
@@ -520,6 +539,11 @@ function scheduleAi(room: any): void {
   }
   if (!aiEnabled()) return;
   if (room.state === "night" && !room.nextEvent) void aiNextEvent(room);
+  // Пока хост собирает состав — готовим персонажей, чтобы старт не ждал модель.
+  if (room.state === "lobby" && room.players.length >= engine.MIN_PLAYERS) {
+    const ready = room.personas && room.personas.forCount === room.players.length;
+    if (!ready) void aiPersonas(room);
+  }
 }
 
 engine.setChangeHandler((room: any) => {
@@ -671,10 +695,15 @@ async function handleAction(
       // разложит карты из content.js — игра начнётся в любом случае.
       let personas: any[] | null = null;
       if (aiEnabled() && room.state === "lobby" && room.hostId === playerId) {
-        personas = await generatePersonas(
-          room.players.map((p: any) => p.name),
-          "техногенная катастрофа: воздух наверху отравлен, выход из бункера заблокирован",
-        );
+        // обычно персонажи уже сгенерированы, пока лобби ждало игроков
+        if (room.personas && room.personas.forCount === room.players.length) {
+          personas = room.personas.list;
+        } else {
+          personas = await generatePersonas(
+            room.players.map((p: any) => p.name),
+            CATASTROPHE,
+          );
+        }
       }
       // исключение из общего правила: startGame принимает объект комнаты
       const result = engine.startGame(room, playerId, { personas: personas || undefined });
