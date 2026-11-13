@@ -5,7 +5,51 @@ const { AVATARS, TRAITS, EVENTS, ENDINGS, ROLE_META } = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
-const ENERGY_DRAIN = 3;
+// Экономика бункера привязана к составу: и стартовые запасы, и суточный расход,
+// и эффекты событий. Иначе на 15 игроков ресурсов хватало вдвое дольше.
+//   еда      — старт 4·N + 8, расход 1 за каждого живого в день;
+//   энергия  — расход 1 за каждые 3 живых (минимум 2), старт ~6 дней;
+//   медикаменты — 2 + ⌈N/3⌉, расход по 1 за ночное лечение;
+//   события  — дельты еды/энергии масштабируются от 0.6 (5 игроков) до 1.5 (15).
+const FOOD_PER_PLAYER = 4;
+const FOOD_DAYS = 8;
+const ENERGY_PER_PLAYER = 3;
+const ENERGY_DAYS = 6;
+
+function energyCost(room) {
+  const alive = alivePlayers(room).length || 1;
+  return Math.max(2, Math.ceil(alive / ENERGY_PER_PLAYER));
+}
+
+function startResources(total) {
+  const energy = Math.max(2, Math.ceil(total / ENERGY_PER_PLAYER));
+  return {
+    food: total * FOOD_PER_PLAYER + FOOD_DAYS,
+    energy: energy * ENERGY_DAYS + 4,
+    meds: 2 + Math.ceil(total / 3),
+  };
+}
+
+// События тоже зависят от состава: на 5 игроков «−8 еды» — это два дня, на 15 —
+// половина дня. Масштаб мягкий, медикаменты не трогаем (там счёт на единицы).
+function eventScale(total) {
+  return Math.min(1.5, Math.max(0.6, total / 10));
+}
+
+function scaleEffects(effects, total) {
+  const k = eventScale(total);
+  const scaled = {};
+  for (const [key, delta] of Object.entries(effects || {})) {
+    if (typeof delta !== 'number') continue;
+    if (key === 'meds' || delta === 0) {
+      scaled[key] = delta;
+      continue;
+    }
+    const value = Math.max(1, Math.round(Math.abs(delta) * k));
+    scaled[key] = delta > 0 ? value : -value;
+  }
+  return scaled;
+}
 const CHAT_LIMIT = 160;
 
 const TEST_PACE = process.env.BUNKER_TEST === '1';
@@ -457,14 +501,20 @@ function beginDay(room) {
 
   system(room, `ДЕНЬ ${room.day}`, 'phase');
   const foodCost = alive.length;
+  const powerCost = energyCost(room);
   room.resources.food = Math.max(0, room.resources.food - foodCost);
-  room.resources.energy = Math.max(0, room.resources.energy - ENERGY_DRAIN);
-  system(room, `Расход бункера: еда −${foodCost}, энергия −${ENERGY_DRAIN}.`, 'muted');
+  room.resources.energy = Math.max(0, room.resources.energy - powerCost);
+  system(
+    room,
+    `Расход бункера: еда −${foodCost}, энергия −${powerCost} (${alive.length} выживших).`,
+    'muted',
+  );
 
   const event = drawEvent(room);
-  room.event = event;
+  // в карточке события показываем те же числа, что реально применились
+  room.event = { ...event, effects: scaleEffects(event.effects, room.players.length) };
   system(room, `СОБЫТИЕ · ${event.title}. ${event.text}`, eventTone(event.effects));
-  applyEffects(room, event.effects);
+  applyEffects(room, room.event.effects);
 
   if (room.resources.food === 0) {
     system(room, 'Еда закончилась. Бункер на грани.', 'bad');
@@ -707,11 +757,7 @@ function startGame(room, playerId) {
   const total = room.players.length;
   const counts = roleCounts(total);
   room.setup = counts;
-  room.resources = {
-    food: total * 4 + 8,
-    energy: total * 2 + 8,
-    meds: 3 + Math.floor(total / 5),
-  };
+  room.resources = startResources(total);
 
   const roleOrder = shuffle(room.players);
   roleOrder.forEach((player, index) => {
@@ -1469,6 +1515,8 @@ module.exports = {
   skipPhase,
   revealTrait,
   endTurn,
+  // чистые помощники — для тестов экономики
+  scaleEffects,
   castVote,
   nightAction,
   doctorSkip,
