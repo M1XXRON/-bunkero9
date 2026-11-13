@@ -42,6 +42,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Оболочка приложения: и лобби, и игра живут в ней.
+   Раньше тут были #lobby и #game — и при переходе лобби -> игра к игре
+   продолжали применяться стили лобби (display:flex вместо grid). */
+#shell {
+  max-width: 100vw;
+  height: 100dvh;
+  min-height: 600px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 button {
   font-family: inherit;
 }
@@ -921,12 +933,6 @@ input:focus {
 
 /* ---------- лобби ---------- */
 
-#lobby {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
 .lobby-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
@@ -1192,7 +1198,7 @@ input:focus {
 }
 
 @media (max-width: 1040px) {
-  #game {
+  #shell {
     height: auto;
     min-height: 100dvh;
     overflow: visible;
@@ -1261,15 +1267,19 @@ input:focus {
   min-height: 0;
 }
 
-/* #board — flex-ребёнок #lobby: без этого лобби прижималось к верху */
-#lobby > #board {
+/* #board — flex-ребёнок оболочки: без этого лобби прижималось к верху */
+#shell > #board {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-#lobby > #board > .lobby-main {
+#shell > #board.game-grid {
+  display: grid;
+}
+
+#shell > #board > .lobby-main {
   flex: 1 1 auto;
   min-height: 0;
 }

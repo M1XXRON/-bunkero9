@@ -588,9 +588,11 @@ function rules(): string {
 
 export function renderApp(snap: Snapshot, origin: string): string {
   const signals = `{dossier: false, rules: false, reveal: false, msg: '', tab: '${snap.chat.day ? "day" : snap.chat.mafia ? "mafia" : "dead"}'}`;
-  const shell = snap.state === "lobby" ? "lobby" : "game";
+  // Оболочка одна на всё приложение: если менять её id при переходе
+  // лобби -> игра, старые правила лобби продолжают применяться к игре.
+  const stateClass = snap.state === "lobby" ? "state-lobby" : "state-game";
   return `<div id="app" data-signals="${signals}" data-init="@get('/stream')">
-    <section id="${shell}" class="screen">
+    <section id="shell" class="screen ${stateClass}">
       ${topbar(snap)}
       <div id="banner" class="phase-banner"></div>
       ${renderBoard(snap, origin)}

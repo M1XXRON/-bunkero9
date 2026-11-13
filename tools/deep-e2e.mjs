@@ -119,7 +119,7 @@ async function main() {
   );
   await sleep(1700);
 
-  note(await evaluate("!!document.getElementById('lobby')"), "лобби: экран открылся");
+  note(await evaluate('!!document.getElementById("shell")'), "лобби: экран открылся");
   const code = (await text('(document.querySelector("#board h1 b")||{}).textContent')).trim();
   note(/^[A-Z0-9]{4}$/.test(code), `лобби: код комнаты (${code})`);
   const lobbyH = await evaluate(
@@ -234,20 +234,21 @@ async function main() {
   }
   note(voted, "голосование: фаза достигнута");
 
-  // ночь
+  // ночь (или финал, если партия уже закончилась)
   let sawNight = false;
-  for (let step = 0; step < 6; step++) {
-    const phase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
-    if (phase.includes("НОЧЬ")) {
+  let finalPhase = "";
+  for (let step = 0; step < 8; step++) {
+    finalPhase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
+    if (finalPhase.includes("НОЧЬ") || finalPhase.includes("ИТОГ")) {
       sawNight = true;
       break;
     }
     await evaluate(
       '[...document.querySelectorAll("button")].find((b) => /Пропустить фазу/.test(b.textContent))?.click()',
     );
-    await sleep(850);
+    await sleep(900);
   }
-  note(sawNight, "ночь: фаза достигнута");
+  note(sawNight, `ночь или финал достигнуты (${finalPhase || "фаза не найдена"})`);
 
   // мобильный вид
   await send("Emulation.setDeviceMetricsOverride", {
