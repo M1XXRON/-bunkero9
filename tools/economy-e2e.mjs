@@ -57,7 +57,7 @@ console.log(
   `  5 игроков: база ${JSON.stringify(smallBase)}, всего еды ${small.resources.food} (припасы +${smallBase.foodSupply})`,
 );
 console.log(
-  ` 15 игроков: база ${JSON.stringify(bigBase)}, всего еды ${big.resources.food} (припасы +${bigBase.energySupply && bigBase.foodSupply})`,
+  ` 15 игроков: база ${JSON.stringify(bigBase)}, всего еды ${big.resources.food} (припасы +${bigBase.foodSupply})`,
 );
 
 note(smallBase.food === 26, `5 игроков: еда = (R−1)·5+6 (${smallBase.food})`);
@@ -82,15 +82,17 @@ note(bigCost.food === 15, `расход еды = живые (15 → −${bigCost
 note(smallCost.energy === 2, `расход энергии на 5 → −${smallCost.energy} (минимум 2)`);
 note(bigCost.energy === 5, `расход энергии на 15 → −${bigCost.energy} (1 за каждые 3)`);
 
-const smallDays = small.resources.energy / smallCost.energy;
-const bigDays = big.resources.energy / bigCost.energy;
+// Дни считаем по базовым запасам (без случайных припасов смены), иначе тест
+// плавает: у кого-то в картах ящик консервов, у кого-то нет.
+const smallDays = smallBase.energy / smallCost.energy;
+const bigDays = bigBase.energy / bigCost.energy;
 note(
   Math.abs(smallDays - bigDays) <= 2,
   `энергии хватает примерно одинаково: ${smallDays.toFixed(1)} и ${bigDays.toFixed(1)} дн.`,
 );
 
-const smallFoodDays = small.resources.food / smallCost.food;
-const bigFoodDays = big.resources.food / bigCost.food;
+const smallFoodDays = smallBase.food / smallCost.food;
+const bigFoodDays = bigBase.food / bigCost.food;
 note(
   Math.abs(smallFoodDays - bigFoodDays) <= 2,
   `еды хватает примерно одинаково: ${smallFoodDays.toFixed(1)} и ${bigFoodDays.toFixed(1)} дн.`,
