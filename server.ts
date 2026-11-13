@@ -422,6 +422,8 @@ function broadcast(room: any, origin: string) {
 // ---------- ИИ: события и разбор (асинхронно, с фолбэком) ----------
 
 const aiBusy = new Set<string>();
+const aiPending = new Map<string, Promise<void>>();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function aiLog(room: any): string {
   const lines = [`Партия в бункере ${room.code}, спасение на ${room.rescueDay}-й день.`];
@@ -483,20 +485,25 @@ async function aiRecap(room: any): Promise<void> {
   }
 }
 
-async function aiPersonas(room: any): Promise<void> {
+// Генерация персонажей: старт может подождать этот промис, но сам его не ждёт.
+function aiPersonas(room: any): Promise<void> {
   const key = `${room.code}:personas`;
-  if (aiBusy.has(key)) return;
-  aiBusy.add(key);
-  const roster = room.players.map((p: any) => p.name);
-  try {
-    const list = await generatePersonas(roster, CATASTROPHE);
-    if (engine.rooms.get(room.code) !== room) return;
-    if (room.state !== "lobby" || room.players.length !== roster.length) return;
-    room.personas = { forCount: roster.length, list };
-    saveRoom(room);
-  } finally {
-    aiBusy.delete(key);
-  }
+  const existing = aiPending.get(key);
+  if (existing) return existing;
+  const job = (async () => {
+    try {
+      const roster = room.players.map((p: any) => p.name);
+      const list = await generatePersonas(roster, CATASTROPHE);
+      if (engine.rooms.get(room.code) !== room) return;
+      if (room.state !== "lobby" || room.players.length !== roster.length) return;
+      room.personas = { forCount: roster.length, list };
+      saveRoom(room);
+    } finally {
+      aiPending.delete(key);
+    }
+  })();
+  aiPending.set(key, job);
+  return job;
 }
 
 async function aiNextEvent(room: any): Promise<void> {
@@ -663,6 +670,7 @@ async function handleAction(
       // рестарте (а cookie и сессия оставались — игрок получал тупик
       // «Вы уже в бункере.»).
       saveRoom(result.room);
+      scheduleAi(result.room);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
@@ -686,6 +694,7 @@ async function handleAction(
       session.lastPayload = "";
       saveSession(sid, result.room.code, result.player.id, null);
       saveRoom(result.room);
+      scheduleAi(result.room);
       broadcast(result.room, origin);
       return new Response(null, { status: 303, headers: { Location: "/", ...cookieFor(sid) } });
     }
@@ -695,14 +704,17 @@ async function handleAction(
       // разложит карты из content.js — игра начнётся в любом случае.
       let personas: any[] | null = null;
       if (aiEnabled() && room.state === "lobby" && room.hostId === playerId) {
-        // обычно персонажи уже сгенерированы, пока лобби ждало игроков
-        if (room.personas && room.personas.forCount === room.players.length) {
-          personas = room.personas.list;
-        } else {
-          personas = await generatePersonas(
-            room.players.map((p: any) => p.name),
-            CATASTROPHE,
-          );
+        // Обычно персонажи готовы заранее. Если генерация ещё идёт — ждём её
+        // не дольше 3 с и стартуем: лучше карты из пула, чем зависшая кнопка.
+        const ready = () =>
+          room.personas && room.personas.forCount === room.players.length
+            ? room.personas.list
+            : null;
+        personas = ready();
+        if (!personas) {
+          const job = aiPending.get(`${room.code}:personas`);
+          if (job) await Promise.race([job, sleep(3000)]);
+          personas = ready();
         }
       }
       // исключение из общего правила: startGame принимает объект комнаты
@@ -746,6 +758,7 @@ async function handleAction(
       const added = addBots(room, count);
       if (!added) return fail(session, "Мест больше нет.");
       saveRoom(room);
+      scheduleAi(room);
       broadcast(room, origin);
       return done();
     }

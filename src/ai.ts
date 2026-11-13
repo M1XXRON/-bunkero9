@@ -7,7 +7,7 @@
 //   BUNKER_AI_KEY=...
 //   BUNKER_AI_URL=https://api.openai.com/v1
 //   BUNKER_AI_MODEL=gpt-4o-mini
-//   BUNKER_AI_TIMEOUT_MS=6000
+//   BUNKER_AI_TIMEOUT_MS=12000
 //
 // mock — детерминированные ответы без сети: на нём гоняются тесты.
 // content.js — CommonJS-пакет контента; берём только заголовки категорий.
@@ -17,7 +17,7 @@ const TRAITS: { key: string; label: string }[] = content.TRAITS;
 const KEY = process.env.BUNKER_AI_KEY ?? "";
 const BASE = (process.env.BUNKER_AI_URL ?? "https://api.openai.com/v1").replace(/\/+$/, "");
 const MODEL = process.env.BUNKER_AI_MODEL ?? "gpt-4o-mini";
-const TIMEOUT_MS = Number(process.env.BUNKER_AI_TIMEOUT_MS ?? 6000);
+const TIMEOUT_MS = Number(process.env.BUNKER_AI_TIMEOUT_MS ?? 12000);
 const MODE = (process.env.BUNKER_AI ?? (KEY ? "live" : "off")).toLowerCase();
 
 export const aiMode = MODE;
