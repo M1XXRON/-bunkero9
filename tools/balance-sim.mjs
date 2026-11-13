@@ -62,16 +62,25 @@ function playOne(n, policy, tag) {
     }
     if (room.state === "vote") {
       const voters = alive();
+      const daysLeft = room.rescueDay - room.day;
+      const foodPerDay = voters.length;
+      const mustSlim = policy === "smart" && room.resources.food < daysLeft * foodPerDay;
+      const canSlim = voters.length - 1 >= room.crewMin;
+      const expel = policy === "random" || (mustSlim && canSlim);
+      // «умные» изгоняют слабейшего по раскрытым картам, случайные — кого попало
+      const candidates = [...voters].sort(
+        (a, b) =>
+          a.traits.filter((t) => t.revealed).length - b.traits.filter((t) => t.revealed).length,
+      );
       for (const voter of voters) {
         const others = voters.filter((p) => p.id !== voter.id);
         if (!others.length) continue;
-        let target;
-        if (policy === "smart" && voter.role !== "infected") {
-          const infected = others.filter((p) => p.role === "infected");
-          target = infected.length ? pick(infected) : pick(others);
-        } else {
-          target = pick(others);
+        if (!expel) {
+          engine.castVote(code, voter.id, "skip");
+          continue;
         }
+        const target =
+          policy === "smart" ? candidates.find((p) => p.id !== voter.id) : pick(others);
         engine.castVote(code, voter.id, target.id);
       }
       const before = alive().length;
@@ -81,38 +90,17 @@ function playOne(n, policy, tag) {
     }
     if (room.state === "night") {
       nights += 1;
-      const aliveNow = alive();
-      const infected = aliveNow.filter((p) => p.role === "infected");
-      const doctor = aliveNow.find((p) => p.role === "doctor");
-      for (const m of infected) {
-        const targets = aliveNow.filter((p) => p.role !== "infected");
-        if (targets.length) engine.nightAction(code, m.id, pick(targets).id);
-      }
-      if (doctor) {
-        const targets = aliveNow.filter((p) => p.id !== room.lastHealTarget);
-        if (targets.length && room.resources.meds > 0 && Math.random() > 0.3) {
-          engine.nightAction(code, doctor.id, pick(targets).id);
-        } else {
-          engine.doctorSkip(code, doctor.id);
-        }
-      }
       const before = alive().length;
       engine.skipPhase(code, host.id);
-      // смерть ночи — не кризис; кризис считаем по причине смерти
-      for (const p of room.players) {
-        if (!p.alive && p.death?.cause === "crisis") crisisDeaths += 1;
-      }
-      if (alive().length === before) {
-        /* ночь без потерь */
+      if (alive().length < before) {
+        const dead = room.players.find((p) => !p.alive && p.death?.cause === "crisis");
+        if (dead) crisisDeaths += 1;
       }
       continue;
     }
     break;
   }
 
-  for (const p of room.players) {
-    if (p.death?.cause === "crisis") crisisDeaths += 1;
-  }
   return {
     winner: room.winner,
     day: room.day,
@@ -127,7 +115,7 @@ function playOne(n, policy, tag) {
 
 const round = (x) => Math.round(x * 10) / 10;
 console.log(`партий на состав: ${GAMES}\n`);
-console.log("N  | люди  | зараж. | ничья | дней | ходов | кризис-смертей | еда=0 | энерг=0");
+console.log("N  | спаслись | погибли | дней | ходов | еда=0 | энерг=0 | изгнаний");
 
 for (const n of SIZES) {
   for (const policy of ["random", "smart"]) {
@@ -143,7 +131,7 @@ for (const n of SIZES) {
     const food0 = round((rows.filter((r) => r.food0).length / rows.length) * 100);
     const energy0 = round((rows.filter((r) => r.energy0).length / rows.length) * 100);
     console.log(
-      `${String(n).padStart(2)} | ${String(share("humans")).padStart(5)}% | ${String(share("infected")).padStart(5)}% | ${String(share("none")).padStart(5)}% | ${String(avg((r) => r.day)).padStart(4)} | ${String(avg((r) => r.turns)).padStart(5)} | ${String(crisisShare).padStart(14)}% | ${String(food0).padStart(5)}% | ${String(energy0).padStart(5)}%   ${policy}`,
+      `${String(n).padStart(2)} | ${String(share("survived")).padStart(8)}% | ${String(share("none")).padStart(7)}% | ${String(avg((r) => r.day)).padStart(4)} | ${String(avg((r) => r.turns)).padStart(5)} | ${String(food0).padStart(5)}% | ${String(energy0).padStart(6)}% | ${String(avg((r) => r.exiles)).padStart(8)}   ${policy}`,
     );
   }
 }

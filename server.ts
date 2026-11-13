@@ -195,17 +195,11 @@ function sessionTab(session: Session): string {
   if (!data) return "day";
   const { snapshot } = data;
   const saved = session.room && snapshot ? tabs.get(session.room + ":" + session.player) : null;
-  if (saved === "mafia" && snapshot.chat.mafia) return "mafia";
+
   if (saved === "dead" && snapshot.chat.dead) return "dead";
   // запасной вариант — «зал»: в ночи у людей каналов нет вовсе, и подпись
   // «Сообщение в мёртвых…» на закрытом поле только путала.
-  return snapshot.chat.day
-    ? "day"
-    : snapshot.chat.mafia
-      ? "mafia"
-      : snapshot.chat.dead
-        ? "dead"
-        : "day";
+  return snapshot.chat.day ? "day" : snapshot.chat.dead ? "dead" : "day";
 }
 
 // ---------- боты ----------
@@ -234,15 +228,15 @@ const BOT_NAMES = [
 
 const BOT_LINES = [
   "Я тут никого не знаю. И это взаимно.",
-  "Профессия у меня мирная, но руки могу и приложить.",
-  "Считаю по картам: двое врут.",
+  "Профессия у меня полезная. Проверьте по карте.",
+  "Считаю по картам: пара историй не сходится.",
   "Меня больше беспокоит вентиляция, чем люди.",
-  "Голосую по интуиции. Пока не подводила.",
-  "Кто-то из нас не тот, за кого себя выдаёт.",
+  "Голосую по расчёту: нас слишком много за столом.",
+  "Кто-то из нас тянет одеяло на себя. И это не я.",
   "У меня с собой был фонарь и три пачки сигарет.",
   "Предлагаю не паниковать и смотреть на руки.",
-  "Ночь покажет, кто действительно спал.",
-  "Мне не нравится, как вы молчите.",
+  "Ночь покажет, кто действительно работал.",
+  "Мне не нравится, как вы молчите. Молчание тоже ест.",
 ];
 
 const pick = (list: any[]): any => list[Math.floor(Math.random() * list.length)];
@@ -316,24 +310,6 @@ function botTurn(room: any, bot: any): void {
   if (room.state === "vote" && !room.votes?.[me.id]) {
     const targets = room.players.filter((p: any) => p.alive && p.id !== me.id);
     if (targets.length) engine.castVote(room.code, me.id, pick(targets).id);
-    return;
-  }
-
-  if (room.state === "night" && room.night) {
-    if (me.role === "infected" && !room.night.mafiaVotes?.[me.id]) {
-      const targets = room.players.filter((p: any) => p.alive && p.role !== "infected");
-      const all = targets.length
-        ? targets
-        : room.players.filter((p: any) => p.alive && p.id !== me.id);
-      if (all.length) engine.nightAction(room.code, me.id, pick(all).id);
-      return;
-    }
-    if (me.role === "doctor" && !room.night.doctorTarget && !room.night.doctorSkip) {
-      const targets = room.players.filter((p: any) => p.alive);
-      if (targets.length && Math.random() > 0.35)
-        engine.nightAction(room.code, me.id, pick(targets).id);
-      else engine.doctorSkip(room.code, me.id);
-    }
   }
 }
 
@@ -604,17 +580,8 @@ async function handleAction(
       const result = engine.castVote(session.room, playerId, String(payload.target));
       return result?.ok === false ? fail(session, result.error) : done();
     }
-    case "night": {
-      const result = engine.nightAction(session.room, playerId, String(payload.target));
-      return result?.ok === false ? fail(session, result.error) : done();
-    }
-    case "doctor-skip": {
-      const result = engine.doctorSkip(session.room, playerId);
-      return result?.ok === false ? fail(session, result.error) : done();
-    }
     case "chat": {
-      const channel =
-        payload.channel === "mafia" || payload.channel === "dead" ? payload.channel : "day";
+      const channel = payload.channel === "dead" ? payload.channel : "day";
       if (session.player) tabs.set(session.room + ":" + session.player, channel);
       const result = engine.sendChat(session.room, playerId, channel, String(payload.text || ""));
       return result?.ok === false ? fail(session, result.error) : done();
@@ -713,7 +680,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
       <span class="tag">≈20 минут</span>
     </div>
     <h1 class="hero-title">БУНКЕР<span class="accent">·9</span></h1>
-    <p class="hero-lead">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь, и кто-то внутри не был человеком ещё вчера. Один голос — один изгнанный.</p>
+    <p class="hero-lead">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь. Мест меньше, чем людей, еды меньше, чем нужно, и каждый день кто-то лишний.</p>
   </section>
 
   <section class="landing-forms">

@@ -15,9 +15,6 @@ export type Player = {
   alive: boolean;
   left: boolean;
   isHost: boolean;
-  teammate: boolean;
-  role: string | null;
-  roleLabel: string | null;
   death: { day: number; cause: string; note?: string } | null;
   traits: { cat: string; label: string; value: string }[];
   traitSlots: { cat: string; label: string; revealed: boolean; value: string | null }[];
@@ -43,18 +40,12 @@ export type Snapshot = {
     avatarIndex: number;
     isHost: boolean;
     alive: boolean;
-    role: string | null;
-    roleLabel: string | null;
     traits: { cat: string; label: string; value: string; revealed: boolean }[];
     canReveal: boolean;
     isMyTurn: boolean;
     canEndTurn: boolean;
     revealedThisRound: boolean;
     votedFor: string | null;
-    nightTarget: string | null;
-    doctorSkip: boolean;
-    lastHealTarget: string | null;
-    teammates: string[];
   };
   players: Player[];
   resources: { food: number; energy: number; meds: number };
@@ -65,7 +56,7 @@ export type Snapshot = {
   maxPlayers: number;
   phaseEndsAt: number | null;
   winner: string | null;
-  chat: { day: boolean; mafia: boolean; dead: boolean };
+  chat: { day: boolean; dead: boolean };
   messages: {
     id: number;
     kind: string;
@@ -75,8 +66,10 @@ export type Snapshot = {
     avatar: string;
     text: string;
   }[];
-  preview: { infected: number; doctor: number; humans: number };
   hints: string[];
+  crewMin: number;
+  rescueDay: number | null;
+  daysLeft: number | null;
   turn: {
     playerId: string | null;
     name: string | null;
@@ -92,7 +85,6 @@ export type Snapshot = {
       current: boolean;
     }[];
   } | null;
-  night: { mafiaVotes?: Record<string, string>; doctorTarget?: string };
   ending: { title: string; text: string } | null;
 };
 
@@ -117,12 +109,6 @@ const PHASE_TONE: Record<string, string> = {
   vote: "vote",
   night: "night",
   end: "end",
-};
-
-const ROLE_NAME: Record<string, string> = {
-  human: "ЖИВОЙ",
-  doctor: "ВРАЧ",
-  infected: "ЗАРАЖЁННЫЙ",
 };
 
 // ---------- аватар ----------
@@ -176,7 +162,11 @@ function topbar(snap: Snapshot): string {
 
     <div class="topbar-center">
       <span class="phase-chip tone-${tone}">${esc(PHASE_CHIP[snap.state] || "")}</span>
-      ${snap.state !== "lobby" ? `<span class="phase-day">день ${snap.day}</span>` : ""}
+      ${
+        snap.state !== "lobby"
+          ? `<span class="phase-day">день ${snap.day}${snap.daysLeft !== null ? ` · до спасения ${snap.daysLeft}` : ""}</span>`
+          : ""
+      }
       ${timer}
     </div>
 
@@ -257,7 +247,7 @@ function lobby(snap: Snapshot, origin: string): string {
       <div class="meta-row">
         <span class="status ok"><i></i>${snap.players.filter((p) => p.connected).length} на связи</span>
         <span class="chip">${snap.players.length} / ${snap.maxPlayers} мест</span>
-        <span class="chip chip-warn">заражённых ${snap.preview.infected}</span>
+        <span class="chip chip-warn">спасение через ${snap.rescueDay ?? "?"} дн.</span>
       </div>
     </section>
 
@@ -339,14 +329,11 @@ function peekCard(p: Player): string {
       : p.connected
         ? "в бункере"
         : "нет связи";
-  const role = p.role
-    ? `<span class="peek-role tone-${p.role}">${esc(p.roleLabel || ROLE_NAME[p.role] || "")}</span>`
-    : "";
   return `<div class="peek-head">
       ${avatar(p, "sm")}
       <div class="peek-id">
         <div class="peek-name">${esc(p.name)}</div>
-        <div class="peek-meta">${esc(state)} · раскрыто ${p.traitsRevealed} из ${p.totalTraits} ${role}</div>
+        <div class="peek-meta">${esc(state)} · раскрыто ${p.traitsRevealed} из ${p.totalTraits}</div>
       </div>
     </div>
     <div class="peek-list">${slots}</div>`;
@@ -358,9 +345,6 @@ function playersPanel(snap: Snapshot): string {
       const status = !p.alive
         ? `<span class="status dead"><i></i>${p.left ? "вышел" : p.death?.cause === "exile" ? "изгнан" : "погиб"}</span>`
         : "";
-      const role = p.role
-        ? `<span class="prole tone-${p.role}">${esc(p.roleLabel || ROLE_NAME[p.role] || "")}</span>`
-        : "";
       const votes = p.votesAgainst > 0 ? `<span class="vote-pin">${p.votesAgainst}</span>` : "";
       return `
         <div class="players-row ${p.alive ? "" : "dead"} ${p.id === snap.me.id ? "is-me" : ""} ${
@@ -369,9 +353,8 @@ function playersPanel(snap: Snapshot): string {
           <div class="peek-source" hidden aria-hidden="true">${peekCard(p)}</div>
           ${avatar(p, "xs")}
           <span class="pname">${esc(p.name)}</span>
-          ${p.teammate ? '<span class="mini-badge mafia">свой</span>' : ""}
           ${p.isBot ? '<span class="mini-badge bot">бот</span>' : ""}
-          ${status}${role}${votes}
+          ${status}${votes}
           <span class="pdots">${"●".repeat(p.traitsRevealed)}${"○".repeat(Math.max(0, p.totalTraits - p.traitsRevealed))}</span>
         </div>`;
     })
@@ -568,72 +551,35 @@ function tally(snap: Snapshot): string {
   return voted ? `<ul class="vote-tally">${voted}</ul>` : "";
 }
 
+// Ночь без ролей: никаких действий — бункер держится на ресурсах.
 function nightScene(snap: Snapshot): string {
-  const me = snap.me;
-  const alive = snap.players.filter((p) => p.alive);
-  if (!me.alive)
-    return `<div class="action-block"><h3>Вы наблюдаете</h3><p>Ночь переживают молча.</p></div>`;
-  if (me.role === "infected") {
-    const targets = alive.filter((p) => p.id !== me.id && !me.teammates.includes(p.id));
-    const cards = targets
-      .map(
-        (p) => `
-        <button class="target-card ${me.nightTarget === p.id ? "selected" : ""}"
-          data-on:click="@post('/act/night', {payload: {target: '${p.id}'}, retry: 'never'})">
-          ${avatar(p, "xs")}
-          <span class="target-name">${esc(p.name)}</span>
-          <span class="target-meta">${p.traitsRevealed}/${p.totalTraits} карт</span>
-        </button>`,
-      )
-      .join("");
-    return `<div class="action-block">
-        <h3>Кого забрать?</h3>
-        <p>Голоса заражённых суммируются. При равенстве цель выбирает случай.</p>
-        ${me.teammates.length ? `<p class="note">Свои рядом — их не выбирают.</p>` : ""}
-        <div class="target-grid">${cards}</div>
-      </div>`;
-  }
-  if (me.role === "doctor") {
-    const targets = alive.filter((p) => p.id !== me.lastHealTarget);
-    const cards = targets
-      .map(
-        (p) => `
-        <button class="target-card ${me.nightTarget === p.id ? "selected" : ""}"
-          data-on:click="@post('/act/night', {payload: {target: '${p.id}'}, retry: 'never'})">
-          ${avatar(p, "xs")}
-          <span class="target-name">${esc(p.name)}</span>
-          <span class="target-meta">жив</span>
-        </button>`,
-      )
-      .join("");
-    return `<div class="action-block">
-        <h3>Кого спасти?</h3>
-        <p>Медикаментов в бункере: <b>${snap.resources.meds}</b>. Попытка спасти тратит один.</p>
-        <div class="target-grid">${cards}</div>
-        <button class="chip skip-vote ${me.doctorSkip ? "selected" : ""}"
-          data-on:click="@post('/act/doctor-skip', {retry: 'never'})">Не тратить медикаменты</button>
-      </div>`;
-  }
+  const res = snap.resources;
+  const starving = res.food <= 0;
+  const cold = res.energy <= 0;
+  const danger = starving || cold;
+  const reasons = [starving ? "еда на нуле" : "", cold ? "энергия на нуле" : ""]
+    .filter(Boolean)
+    .join(" · ");
   return `<div class="action-block">
-      <h3>Вы заперты в отсеке</h3>
-      <p>За стеной — шаги, которые не совпадают с ритмом ни одного из выживших. Остаётся ждать рассвета.</p>
-      <p class="note">У вас нет ночного действия. Смотрите в чат: возможно, кто-то уже проговорился.</p>
+      <h3>${danger ? "Ночь на пределе" : "Свет гаснет"}</h3>
+      <p>${
+        danger
+          ? `Системы не справляются: ${reasons}. Если в запасе есть медикаменты — смена потратит один и обойдётся без потерь. Иначе бункер потеряет одного.`
+          : "Все двери заперты, системы гудят ровно. Ночь переживают молча — до утра никто не выйдет из отсека."
+      }</p>
+      <p class="note">Медикаменты в бункере: <b>${res.meds}</b> · до спасения ${snap.daysLeft ?? "?"} дн.</p>
     </div>`;
 }
 
 function endScene(snap: Snapshot): string {
   const ending = snap.ending;
-  const tag =
-    snap.winner === "humans"
-      ? "ПОБЕДА ЖИВЫХ"
-      : snap.winner === "infected"
-        ? "ПОБЕДА ЗАРАЖЁННЫХ"
-        : "НИЧЬЯ";
+  const survived = snap.winner === "survived";
+  const tag = survived ? "СПАСЕНИЕ" : "БУНКЕР ПОГИБ";
   const roster = snap.players
-    .map(
-      (p) =>
-        `<li>${avatar(p, "xs")} <b>${esc(p.name)}</b> — ${esc(p.roleLabel || ROLE_NAME[p.role || ""] || "—")}</li>`,
-    )
+    .map((p) => {
+      const fate = p.alive ? (survived ? "спасся" : "погиб") : p.left ? "вышел" : "изгнан";
+      return `<li class="${p.alive && survived ? "survived" : ""}">${avatar(p, "xs")} <b>${esc(p.name)}</b> — ${esc(fate)}</li>`;
+    })
     .join("");
   return `<div class="action-block">
       <span class="eyebrow">ПРОТОКОЛ ЗАВЕРШЁН</span>
@@ -715,8 +661,8 @@ function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
     intro: () => `<div class="action-block">
         <h3>Добро пожаловать в «Кольцо-9»</h3>
-        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и чужие голоса за стеной.</p>
-        <p class="note">Роли уже розданы. Первый день начнётся автоматически.</p>
+        <p>Семнадцать дней назад мир замолчал. Теперь у вас есть еда, генератор и слишком много людей на слишком мало мест.</p>
+        <p class="note">Смена собрана. Спасение через ${snap.rescueDay ?? "?"} дней — до тех пор нужно держать ресурсы и людей.</p>
         <button class="btn btn-secondary" data-on:click="document.getElementById('dossier').showModal()">Открыть досье</button>
       </div>`,
     reveal: () => revealScene(snap),
@@ -726,11 +672,11 @@ function scene(snap: Snapshot): string {
     end: () => endScene(snap),
   };
   const titles: Record<string, string> = {
-    intro: "Роли розданы",
+    intro: "Смена собрана",
     reveal: "Раскрытие карт",
     discussion: "Обсуждение",
     vote: "Голосование",
-    night: "Свет гаснет",
+    night: "Ночь",
     end: "Протокол завершён",
   };
   const body = (byState[snap.state] || (() => '<p class="note">Ждём начала…</p>'))();
@@ -848,12 +794,10 @@ function feedHtml(snap: Snapshot, activeTab = "day"): string {
 }
 
 function chatPanel(snap: Snapshot, activeTab = "day"): string {
-  const allowed = [
-    snap.chat.day ? "day" : null,
-    snap.chat.mafia ? "mafia" : null,
-    snap.chat.dead ? "dead" : null,
-  ].filter(Boolean) as string[];
-  const label: Record<string, string> = { day: "ЗАЛ", mafia: "ШЁПОТ", dead: "МЁРТВЫЕ" };
+  const allowed = [snap.chat.day ? "day" : null, snap.chat.dead ? "dead" : null].filter(
+    Boolean,
+  ) as string[];
+  const label: Record<string, string> = { day: "ЗАЛ", dead: "МЁРТВЫЕ" };
   // Активный канал — серверное состояние (/act/tab), не сигнал: лента рендерится
   // на сервере, поэтому клик по «ШЁПОТ» не менял ничего до отправки сообщения.
   const tabs =
@@ -872,7 +816,7 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
       <div id="chatTabs">${tabs}</div>
       <div class="chat-feed" id="chatFeed" role="log" aria-live="polite" aria-relevant="additions" aria-label="Лента чата">${feedHtml(snap, activeTab)}</div>
       <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
-        <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в ${{ day: "зал", mafia: "шёпот", dead: "мёртвых" }[activeTab] || "зал"}…"
+        <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в ${{ day: "зал", dead: "мёртвых" }[activeTab] || "зал"}…"
           data-bind="msg" data-preserve-attr="value" ${allowed.length ? "" : "disabled"}>
         <input type="hidden" name="channel" value="${activeTab}">
         <button type="submit" class="send-btn" ${allowed.length ? "" : "disabled"} aria-label="Отправить">→</button>
@@ -884,7 +828,6 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
 
 function dossierBody(snap: Snapshot): string {
   const me = snap.me;
-  const roleHidden = snap.state !== "end";
   const traits = me.traits
     .map(
       (t) => `<div class="trait-row ${t.revealed ? "revealed" : ""}">
@@ -901,19 +844,7 @@ function dossierBody(snap: Snapshot): string {
           <h2 id="dossierTitle">${esc(me.name)}</h2>
         </div>
         <div class="modal-section">
-          ${
-            roleHidden && me.alive
-              ? `<p class="note">За этой дверью — роль и пять личных карт.</p>
-               <div class="role-card"><span class="role-sigil">?</span><b>РОЛЬ СКРЫТА</b></div>
-               <button class="btn btn-primary btn-wide" data-on:click="$reveal = true"
-                 data-show="!$reveal">Показать роль</button>
-               <div data-show="$reveal" class="role-card role-open">
-                 <b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
-                 <p>${esc(roleHint(me.role))}</p>
-               </div>`
-              : `<div class="role-card role-open"><b class="tone-${me.role}">${esc(me.roleLabel || "")}</b>
-                 <p>${esc(roleHint(me.role))}</p></div>`
-          }
+          <p class="note">Пять карт — всё, что о вас знают остальные. Одну можно показать в свой ход, остальные останутся за дверью.</p>
         </div>
         <div class="modal-section">
           <span class="eyebrow">КАРТЫ ПЕРСОНАЖА</span>
@@ -921,24 +852,16 @@ function dossierBody(snap: Snapshot): string {
         </div>`;
 }
 
-function roleHint(role: string | null): string {
-  if (role === "infected")
-    return "Вы не человек. Ночью выбирайте жертву. Днём — лгите и ищите врача.";
-  if (role === "doctor")
-    return "Вы человек и врач. Раз за ночь спасайте одного выжившего за медикамент.";
-  if (role === "human")
-    return "Вы человек. Найдите заражённых и изгоните их до того, как бункер опустеет.";
-  return "";
-}
-
-function rules(): string {
+function rules(snap: Snapshot): string {
   return `
         <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
         <div class="modal-section">
-          <p><b>День.</b> Раскройте одну карту, обсудите и проголосуйте. Изгнанный выбывает, его роль раскрывается. При равенстве голосов никто не уходит.</p>
-          <p><b>Ночь.</b> Заражённые вместе выбирают жертву. Врач может спасти одного, потратив медикамент.</p>
-          <p><b>Победа.</b> Живые — когда заражённых не осталось. Заражённые — когда их не меньше, чем живых.</p>
+          <p><b>Цель.</b> Дожить до спасения. Оно приходит после ночи последнего дня — спасаются все, кто к тому моменту жив.</p>
+          <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
+          <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
+          <p><b>Ночь.</b> Если к утру еда или энергия на нуле, бункер теряет одного. Медикаменты могут прикрыть одну такую ночь — их тратит смена, а не роль.</p>
+          <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>
         </div>`;
 }
 
@@ -959,7 +882,7 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
       <dialog id="dossier" class="sheet" aria-labelledby="dossierTitle">
         <div id="dossierBody">${dossierBody(snap)}</div>
       </dialog>
-      <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules()}</dialog>
+      <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules(snap)}</dialog>
       <div id="error"></div>
       <div id="peek" class="peek" hidden></div>
     </section>
@@ -991,12 +914,10 @@ export function renderTopbar(snap: Snapshot): string {
 }
 
 export function renderTabs(snap: Snapshot, activeTab = "day"): string {
-  const allowed = [
-    snap.chat.day ? "day" : null,
-    snap.chat.mafia ? "mafia" : null,
-    snap.chat.dead ? "dead" : null,
-  ].filter(Boolean) as string[];
-  const labels: Record<string, string> = { day: "ЗАЛ", mafia: "ШЁПОТ", dead: "МЁРТВЫЕ" };
+  const allowed = [snap.chat.day ? "day" : null, snap.chat.dead ? "dead" : null].filter(
+    Boolean,
+  ) as string[];
+  const labels: Record<string, string> = { day: "ЗАЛ", dead: "МЁРТВЫЕ" };
   const tabs =
     allowed.length > 1
       ? allowed

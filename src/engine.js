@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { AVATARS, TRAITS, EVENTS, ENDINGS, ROLE_META } = require('./content');
+const { AVATARS, TRAITS, EVENTS, ENDINGS } = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -11,6 +11,25 @@ const MAX_PLAYERS = 15;
 //   энергия  — расход 1 за каждые 3 живых (минимум 2), старт ~6 дней;
 //   медикаменты — 2 + ⌈N/3⌉, расход по 1 за ночное лечение;
 //   события  — дельты еды/энергии масштабируются от 0.6 (5 игроков) до 1.5 (15).
+// Без ролей игра держится на выживании: дожить до спасения и не потерять смену.
+//   спасение   — приходит после ночи дня rescueDay;
+//   минимум смены — если живых меньше, бункер некому обслуживать (проигрыш);
+//   кризис — если еда или энергия на нуле, ночью бункер теряет одного, но
+//            медикаменты можно потратить, чтобы обойтись без потерь.
+const CREW_SHARE = 0.7;
+const RESCUE_BASE = 4;
+const RESCUE_PER_PLAYER = 6;
+
+function rescueDayFor(total) {
+  return RESCUE_BASE + Math.ceil(total / RESCUE_PER_PLAYER);
+}
+
+// Минимум смены — доля от стартового состава: системы требуют людей, поэтому
+// «проредить всех лишних» нельзя. Именно это делает голосование решением.
+function crewMinFor(total) {
+  return Math.max(3, Math.ceil(total * CREW_SHARE));
+}
+
 const FOOD_PER_PLAYER = 4;
 const FOOD_DAYS = 8;
 const ENERGY_PER_PLAYER = 3;
@@ -21,11 +40,18 @@ function energyCost(room) {
   return Math.max(2, Math.ceil(alive / ENERGY_PER_PLAYER));
 }
 
+// Запас стартует «чуть меньше, чем нужно дожить всем составом»: чтобы спастись,
+// смена должна либо экономить (кого-то изгнать), либо поймать хорошие события,
+// но не может позволить себе терять людей без счёта.
+// Еды заведомо меньше, чем нужно протянуть всем составом: разницу закрывают
+// либо изгнания (едоков меньше), либо удачные события. Перебор с изгнаниями
+// убивает смену — она становится меньше минимума.
 function startResources(total) {
+  const rescue = rescueDayFor(total);
   const energy = Math.max(2, Math.ceil(total / ENERGY_PER_PLAYER));
   return {
-    food: total * FOOD_PER_PLAYER + FOOD_DAYS,
-    energy: energy * ENERGY_DAYS + 4,
+    food: (rescue - 1) * total + 6,
+    energy: energy * rescue + 4,
     meds: 2 + Math.ceil(total / 3),
   };
 }
@@ -129,23 +155,6 @@ function normalizeCode(raw) {
   return typeof raw === 'string' ? raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) : '';
 }
 
-// Число заражённых. Держим правило «запас людей не меньше, чем нужно точных
-// изгнаний»: I ≤ (N−1)/3, иначе партия решается одной ошибкой (было: на 6
-// игроков 2 заражённых при запасе в 2 смерти — почти невыигрышно для людей).
-function infectedCount(total) {
-  return Math.max(1, Math.floor((total - 1) / 3));
-}
-
-function roleCounts(total) {
-  const infected = infectedCount(total);
-  const doctor = total >= MIN_PLAYERS ? 1 : 0;
-  return { infected, doctor, humans: Math.max(0, total - infected - doctor) };
-}
-
-function roleName(role) {
-  return ROLE_META[role] ? ROLE_META[role].name : 'НЕИЗВЕСТНО';
-}
-
 function alivePlayers(room) {
   return room.players.filter((player) => player.alive);
 }
@@ -184,11 +193,10 @@ function makePlayer({ name, avatar, socketId }) {
     socketId,
     connected: true,
     disconnectedAt: null,
-    role: null,
+
     traits: [],
     alive: true,
     left: false,
-    roleRevealed: false,
     death: null,
     revealedThisRound: false,
     lastHealTarget: null,
@@ -341,31 +349,28 @@ function finishGame(room, winner) {
   room.night = null;
   room.votes = {};
   for (const player of room.players) {
-    player.roleRevealed = true;
     player.traits.forEach((trait) => {
       trait.revealed = true;
     });
   }
   const ending = ENDINGS[winner] || ENDINGS.none;
-  const tone = winner === 'humans' ? 'good' : winner === 'infected' ? 'bad' : 'warn';
+  const tone = winner === 'survived' ? 'good' : 'warn';
   system(room, ending.title, tone);
   system(room, ending.text, 'info');
   changed(room);
 }
 
-function evaluateWin(room) {
+// Исход без ролей: либо дожили до спасения, либо смена кончилась.
+function checkEnd(room) {
   const alive = alivePlayers(room);
   if (!alive.length) return 'none';
-  const infected = alive.filter((player) => player.role === 'infected').length;
-  if (infected === 0) return 'humans';
-  const humans = alive.length - infected;
-  if (infected >= humans) return 'infected';
+  if (alive.length < room.crewMin) return 'none';
+  if (room.day >= room.rescueDay) return 'survived';
   return null;
 }
 
 function removePlayer(room, player, cause, note) {
   player.alive = false;
-  player.roleRevealed = true;
   player.death = { day: room.day, cause, note: note || null };
   // Мёртвый хост не должен распоряжаться темпом: передаём живому человеку,
   // если людей нет — любому живому.
@@ -375,9 +380,8 @@ function removePlayer(room, player, cause, note) {
     room.hostId = next ? next.id : null;
   }
   const prefix = cause === 'exile' ? 'Изгнание' : cause === 'night' ? 'Ночная потеря' : cause === 'left' ? 'Выход' : 'Кризис';
-  const tone = cause === 'exile' && player.role === 'infected' ? 'good' : 'bad';
   const reason = cause === 'crisis' && note ? ` Причина — ${note}.` : '';
-  system(room, `${prefix}: ${player.name}.${reason} Роль — ${roleName(player.role)}.`, tone);
+  system(room, `${prefix}: ${player.name}.${reason}`, 'bad');
 }
 
 function checkRevealComplete(room) {
@@ -452,19 +456,7 @@ function checkVoteComplete(room) {
   }
 }
 
-function checkNightReady(room) {
-  if (room.state !== 'night' || !room.night) return;
-  const alive = alivePlayers(room);
-  const mafia = alive.filter((player) => player.role === 'infected');
-  const doctor = alive.find((player) => player.role === 'doctor');
-  const mafiaReady = mafia.length > 0 && mafia.every((player) => room.night.mafiaVotes[player.id]);
-  const doctorReady =
-    !doctor ||
-    room.resources.meds <= 0 ||
-    room.night.doctorSkip ||
-    Boolean(room.night.doctorTarget);
-  if (mafiaReady && doctorReady) accelerate(room, 4200);
-}
+
 
 function autoReveal(room, player) {
   if (player.revealedThisRound) return;
@@ -533,18 +525,8 @@ function beginDay(room) {
     system(room, 'Энергия на нуле. Холод пробирается в отсеки.', 'bad');
   }
 
-  if (room.resources.food === 0 || room.resources.energy === 0) {
-    const victim = pick(alive);
-    const cause =
-      room.resources.food === 0 && room.resources.energy === 0
-        ? 'голод и холод'
-        : room.resources.food === 0
-          ? 'голод'
-          : 'холод';
-    removePlayer(room, victim, 'crisis', cause);
-  }
-
-  const winner = evaluateWin(room);
+  // Кризис теперь решается ночью (resolveNight): там же медикаменты.
+  const winner = checkEnd(room);
   if (winner) {
     finishGame(room, winner);
     return;
@@ -644,7 +626,7 @@ function resolveVote(room) {
     }
   }
 
-  const winner = evaluateWin(room);
+  const winner = checkEnd(room);
   if (winner) {
     finishGame(room, winner);
     return;
@@ -652,87 +634,44 @@ function resolveVote(room) {
   startNight(room);
 }
 
+// Ночь: ни ролей, ни действий — бункер доживает до утра и платит за это.
+// Кризис (еда или энергия на нуле) забирает одного, медикаменты могут
+// прикрыть одну такую ночь.
 function startNight(room) {
   if (room.state === 'end') return;
   room.votes = {};
-  room.night = { mafiaVotes: {}, doctorTarget: null, doctorSkip: false };
+  room.night = { crisis: null };
   startPhase(room, 'night', phaseMs(room, 'night'), () => resolveNight(room));
   system(room, `НОЧЬ ${room.day} · Свет гаснет.`, 'phase');
   changed(room);
 }
 
-function chooseMafiaTarget(room) {
-  const alive = alivePlayers(room);
-  const aliveById = new Map(alive.map((player) => [player.id, player]));
-  const votes = room.night ? room.night.mafiaVotes : {};
-  const counts = {};
-  for (const [voterId, targetId] of Object.entries(votes)) {
-    const voter = aliveById.get(voterId);
-    const target = aliveById.get(targetId);
-    if (!voter || voter.role !== 'infected') continue;
-    if (!target || target.role === 'infected') continue;
-    counts[targetId] = (counts[targetId] || 0) + 1;
-  }
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  if (entries.length) {
-    const top = entries.filter(([, count]) => count === entries[0][1]);
-    return aliveById.get(pick(top)[0]) || null;
-  }
-  const possible = alive.filter((player) => player.role !== 'infected');
-  return possible.length ? pick(possible) : null;
-}
-
 function resolveNight(room) {
-  if (room.state !== 'night' || !room.night) return;
+  if (room.state !== 'night') return;
   const alive = alivePlayers(room);
-  const target = chooseMafiaTarget(room);
-  const doctor = alive.find((player) => player.role === 'doctor');
-  const mafia = alive.filter((player) => player.role === 'infected');
-  let saved = false;
-  let medsUsed = false;
+  const starving = room.resources.food <= 0;
+  const cold = room.resources.energy <= 0;
 
-  if (doctor && room.resources.meds > 0 && room.night.doctorTarget) {
-    const healTarget = alive.find((player) => player.id === room.night.doctorTarget);
-    if (healTarget) {
-      room.resources.meds = Math.max(0, room.resources.meds - 1);
-      medsUsed = true;
-      room.lastHealTarget = healTarget.id;
-      if (target && target.id === healTarget.id) saved = true;
-    }
-  }
-
-  if (target && saved) {
-    system(room, 'Ночь прошла без потерь.', 'good');
-    if (doctor) {
-      privateMessage(
+  if (starving || cold) {
+    const reason = starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод';
+    if (room.resources.meds > 0) {
+      // медикаменты — не лечение ролей, а буфер: одна тяжёлая ночь без потерь
+      room.resources.meds -= 1;
+      system(
         room,
-        doctor.id,
-        `Вы спасли ${target.name}. Израсходован 1 медикамент. Осталось: ${room.resources.meds}.`,
-        'good',
+        `Ночь на пределе (${reason}), но медикаменты и воля смены вытянули всех. Осталось медикаментов: ${room.resources.meds}.`,
+        'warn',
       );
-    }
-    for (const mafiaPlayer of mafia) {
-      privateMessage(room, mafiaPlayer.id, `Цель — ${target.name} — выжила. Кто-то вмешался.`, 'bad');
-    }
-  } else if (target) {
-    removePlayer(room, target, 'night');
-    for (const mafiaPlayer of mafia) {
-      privateMessage(room, mafiaPlayer.id, `${target.name} устранён.`, 'good');
+    } else if (alive.length) {
+      const victim = alive[Math.floor(Math.random() * alive.length)];
+      system(room, `Ночь на пределе — ${reason}.`, 'bad');
+      removePlayer(room, victim, 'crisis', reason);
     }
   } else {
-    system(room, 'Ночь прошла без потерь.', 'info');
+    system(room, 'Ночь прошла спокойно. Системы держат.', 'good');
   }
 
-  if (doctor && medsUsed && !saved) {
-    privateMessage(
-      room,
-      doctor.id,
-      `Вы провели ночь у операционного стола, но ваша цель не понадобилась. Израсходован 1 медикамент. Осталось: ${room.resources.meds}.`,
-      'info',
-    );
-  }
-
-  const winner = evaluateWin(room);
+  const winner = checkEnd(room);
   if (winner) {
     finishGame(room, winner);
     return;
@@ -765,16 +704,9 @@ function startGame(room, playerId) {
   room.turn = null;
 
   const total = room.players.length;
-  const counts = roleCounts(total);
-  room.setup = counts;
+  room.rescueDay = rescueDayFor(total);
+  room.crewMin = crewMinFor(total);
   room.resources = startResources(total);
-
-  const roleOrder = shuffle(room.players);
-  roleOrder.forEach((player, index) => {
-    if (index < counts.infected) player.role = 'infected';
-    else if (index === counts.infected) player.role = 'doctor';
-    else player.role = 'human';
-  });
 
   const pools = {};
   for (const category of TRAITS) {
@@ -783,7 +715,6 @@ function startGame(room, playerId) {
   room.players.forEach((player, playerIndex) => {
     player.alive = true;
     player.left = false;
-    player.roleRevealed = false;
     player.death = null;
     player.revealedThisRound = false;
     player.lastHealTarget = null;
@@ -798,12 +729,12 @@ function startGame(room, playerId) {
   system(room, 'СИГНАЛ ТИШИНЫ', 'title');
   system(
     room,
-    'Дверь заперта. Снаружи — только тишина. Внутри — люди, ресурсы и что-то ещё. Найдите чужих до рассвета.',
+    'Дверь заперта. Снаружи — только тишина. Внутри — люди, ресурсы и теснота. Мест меньше, чем желающих.',
     'info',
   );
   system(
     room,
-    `Заражённых: ${counts.infected} · Врач: 1 · Обычных: ${counts.humans}. Роли розданы.`,
+    `Смена: ${total} человек. Спасение — через ${room.rescueDay} дней. Бункер выдержит, только если в нём останется хотя бы ${room.crewMin}.`,
     'warn',
   );
   startPhase(room, 'intro', phaseMs(room, 'intro'), () => beginDay(room));
@@ -826,7 +757,8 @@ function createRoom({ name, avatar, socketId }) {
     resources: { food: 0, energy: 0, meds: 0 },
     event: null,
     usedEvents: [],
-    setup: null,
+    rescueDay: null,
+    crewMin: 3,
     messages: [],
     msgSeq: 0,
     votes: {},
@@ -922,17 +854,16 @@ function leaveRoom(code, playerId) {
   if (wasAlive) {
     player.alive = false;
     player.left = true;
-    player.roleRevealed = true;
     player.death = { day: room.day, cause: 'left', note: 'покинул игру' };
     player.token = null;
     player.connected = false;
     player.socketId = null;
-    system(room, `Выход: ${player.name}. Роль — ${roleName(player.role)}.`, 'warn');
+    system(room, `Выход: ${player.name}.`, 'warn');
     if (room.hostId === player.id) {
       const next = connectedPlayers(room)[0] || room.players.find((item) => item.id !== player.id) || null;
       room.hostId = next ? next.id : null;
     }
-    const winner = evaluateWin(room);
+    const winner = checkEnd(room);
     if (winner) {
       finishGame(room, winner);
       return { ok: true, deleted: false };
@@ -943,8 +874,6 @@ function leaveRoom(code, playerId) {
       else checkRevealComplete(room);
     } else if (room.state === 'vote') {
       checkVoteComplete(room);
-    } else if (room.state === 'night') {
-      checkNightReady(room);
     }
     changed(room);
     return { ok: true, deleted: false };
@@ -1069,53 +998,6 @@ function castVote(code, playerId, targetId) {
   return { ok: true };
 }
 
-function nightAction(code, playerId, targetId) {
-  const room = rooms.get(normalizeCode(code));
-  if (!room) return { ok: false, error: 'Бункер не найден.' };
-  if (room.state !== 'night' || !room.night) return { ok: false, error: 'Сейчас не ночь.' };
-  const player = playerById(room, playerId);
-  if (!player || !player.alive) return { ok: false, error: 'Вы не участвуете в игре.' };
-  const target = playerById(room, targetId);
-  if (!target || !target.alive) return { ok: false, error: 'Цель недоступна.' };
-
-  if (player.role === 'infected') {
-    if (target.role === 'infected') return { ok: false, error: 'Своих не выбирают.' };
-    room.night.mafiaVotes[player.id] = target.id;
-    checkNightReady(room);
-    changed(room);
-    return { ok: true };
-  }
-
-  if (player.role === 'doctor') {
-    if (room.resources.meds <= 0) return { ok: false, error: 'Медикаментов больше нет.' };
-    if (room.lastHealTarget === target.id) {
-      return { ok: false, error: 'Этого выжившего нельзя спасать две ночи подряд.' };
-    }
-    room.night.doctorTarget = target.id;
-    room.night.doctorSkip = false;
-    checkNightReady(room);
-    changed(room);
-    return { ok: true };
-  }
-
-  return { ok: false, error: 'У вас нет ночного действия.' };
-}
-
-function doctorSkip(code, playerId) {
-  const room = rooms.get(normalizeCode(code));
-  if (!room) return { ok: false, error: 'Бункер не найден.' };
-  if (room.state !== 'night' || !room.night) return { ok: false, error: 'Сейчас не ночь.' };
-  const player = playerById(room, playerId);
-  if (!player || !player.alive || player.role !== 'doctor') {
-    return { ok: false, error: 'У вас нет ночного действия.' };
-  }
-  room.night.doctorTarget = null;
-  room.night.doctorSkip = true;
-  checkNightReady(room);
-  changed(room);
-  return { ok: true };
-}
-
 function sendChat(code, playerId, channel, text) {
   const room = rooms.get(normalizeCode(code));
   if (!room) return { ok: false, error: 'Бункер не найден.' };
@@ -1137,7 +1019,7 @@ function sendChat(code, playerId, channel, text) {
 }
 
 function chatAvailability(room, player) {
-  const result = { day: false, mafia: false, dead: false };
+  const result = { day: false, dead: false };
   if (room.state === 'end') {
     result.day = true;
     return result;
@@ -1151,7 +1033,6 @@ function chatAvailability(room, player) {
     return result;
   }
   if (['intro', 'reveal', 'discussion', 'vote'].includes(room.state)) result.day = true;
-  if (room.state === 'night' && player.role === 'infected') result.mafia = true;
   return result;
 }
 
@@ -1169,11 +1050,9 @@ function rematch(code, playerId) {
     return { ok: true, deleted: true };
   }
   room.players.forEach((player) => {
-    player.role = null;
     player.traits = [];
     player.alive = true;
     player.left = false;
-    player.roleRevealed = false;
     player.death = null;
     player.revealedThisRound = false;
     player.lastHealTarget = null;
@@ -1183,7 +1062,6 @@ function rematch(code, playerId) {
   room.day = 0;
   room.event = null;
   room.usedEvents = [];
-  room.setup = null;
   room.resources = { food: 0, energy: 0, meds: 0 };
   room.votes = {};
   room.night = null;
@@ -1233,7 +1111,6 @@ function messagesFor(room, viewer) {
     .filter((message) => {
       if (message.to) return message.to === viewer.id;
       if (room.state === 'end') return true;
-      if (message.channel === 'mafia') return viewer.role === 'infected' && viewer.alive;
       if (message.channel === 'dead') return !viewer.alive;
       return true;
     })
@@ -1247,6 +1124,20 @@ function discussionHints(room, spokenToday) {
   const alive = alivePlayers(room);
   if (!alive.length) return [];
   const hints = [];
+
+  // Главная подсказка теперь про ресурсы и спасение, а не про роли.
+  const daysLeft = Math.max(0, (room.rescueDay || 0) - room.day);
+  const foodDays = Math.floor(room.resources.food / Math.max(1, alive.length));
+  hints.push(
+    foodDays <= 1
+      ? `Еды осталось на день — пора решать, кто лишний за столом.`
+      : `Еды хватит примерно на ${foodDays} дн., до спасения ${daysLeft} дн.`,
+  );
+  if (alive.length <= room.crewMin + 1) {
+    hints.push(
+      `В бункере ${alive.length} человек, минимум для смены — ${room.crewMin}. Следующее изгнание может стать последним для всех.`,
+    );
+  }
 
   const silent = alive.filter((player) => !spokenToday.has(player.id));
   if (silent.length) {
@@ -1278,7 +1169,7 @@ function discussionHints(room, spokenToday) {
   }
 
   if (room.resources.meds <= 1) {
-    hints.push('Медикаментов почти нет — врач теперь на вес золота.');
+    hints.push('Медикаментов почти нет — тяжёлую ночь прикрыть больше нечем.');
   }
 
   return hints.slice(0, 3);
@@ -1334,7 +1225,6 @@ function serializeFor(room, viewer) {
   );
 
   const players = room.players.map((player) => {
-    const visibleRole = isEnd || player.roleRevealed;
     const revealedTraits = isEnd
       ? player.traits
       : player.traits.filter((trait) => trait.revealed);
@@ -1348,14 +1238,6 @@ function serializeFor(room, viewer) {
       alive: player.alive,
       left: player.left,
       isHost: room.hostId === player.id,
-      teammate:
-        viewer.role === 'infected' &&
-        player.role === 'infected' &&
-        player.id !== viewer.id &&
-        !isEnd,
-      role: visibleRole ? player.role : null,
-      roleLabel: visibleRole ? roleName(player.role) : null,
-      roleRevealed: player.roleRevealed,
       death: player.death,
       traits: revealedTraits.map((trait) => ({
         cat: trait.cat,
@@ -1383,35 +1265,12 @@ function serializeFor(room, viewer) {
     };
   });
 
-  const night = {};
-  if (room.state === 'night' && room.night) {
-    if (viewer.role === 'infected' && viewer.alive) {
-      const votes = {};
-      for (const [voterId, targetId] of Object.entries(room.night.mafiaVotes)) {
-        if (aliveIds.has(voterId) && aliveIds.has(targetId)) votes[voterId] = targetId;
-      }
-      night.mafiaVotes = votes;
-    }
-    if (viewer.role === 'doctor' && viewer.alive) {
-      night.doctorTarget = room.night.doctorTarget;
-      night.doctorSkip = room.night.doctorSkip;
-      night.lastHealTarget = room.lastHealTarget;
-    }
-  }
-
   const myTraits = viewer.traits.map((trait) => ({
     cat: trait.cat,
     label: trait.label,
     value: trait.value,
     revealed: trait.revealed,
   }));
-  const teammates =
-    viewer.role === 'infected'
-      ? room.players
-          .filter((player) => player.role === 'infected' && player.id !== viewer.id)
-          .map((player) => player.id)
-      : [];
-
   const me = {
     id: viewer.id,
     name: viewer.name,
@@ -1421,8 +1280,6 @@ function serializeFor(room, viewer) {
     connected: viewer.connected,
     alive: viewer.alive,
     left: viewer.left,
-    role: viewer.role,
-    roleLabel: viewer.role ? roleName(viewer.role) : null,
     traits: myTraits,
     canReveal:
       room.state === 'reveal' &&
@@ -1438,18 +1295,7 @@ function serializeFor(room, viewer) {
       (viewer.revealedThisRound || !myTraits.some((trait) => !trait.revealed)),
     revealedThisRound: Boolean(viewer.revealedThisRound),
     votedFor: room.state === 'vote' ? room.votes[viewer.id] || null : null,
-    lastHealTarget: viewer.role === 'doctor' ? room.lastHealTarget : null,
-    teammates,
     death: viewer.death,
-    nightTarget:
-      room.state === 'night' && room.night
-        ? viewer.role === 'infected'
-          ? room.night.mafiaVotes[viewer.id] || null
-          : viewer.role === 'doctor'
-            ? room.night.doctorTarget
-            : null
-        : null,
-    doctorSkip: room.state === 'night' && room.night ? Boolean(room.night.doctorSkip) : false,
   };
 
   return {
@@ -1462,12 +1308,12 @@ function serializeFor(room, viewer) {
     settings: { ...room.settings },
     resources: { ...room.resources },
     event: room.event,
-    setup: room.setup,
-    preview: room.state === 'lobby' ? roleCounts(room.players.length) : null,
+    crewMin: room.crewMin || crewMinFor(room.players.length),
+    rescueDay: room.rescueDay || null,
+    daysLeft: room.rescueDay ? Math.max(0, room.rescueDay - room.day) : null,
     players,
     me,
     turn,
-    night,
     messages: messagesFor(room, viewer),
     winner: room.winner,
     phaseEndsAt: room.phaseEndsAt,
@@ -1542,8 +1388,6 @@ module.exports = {
   // чистые помощники — для тестов экономики
   scaleEffects,
   castVote,
-  nightAction,
-  doctorSkip,
   sendChat,
   rematch,
   setPace,
@@ -1551,7 +1395,6 @@ module.exports = {
   serializeFor,
   cleanupRooms,
   resumeRoom,
-  roleCounts,
   MIN_PLAYERS,
   MAX_PLAYERS,
 };

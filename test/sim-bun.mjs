@@ -99,7 +99,7 @@ async function main() {
 
   const lobbyHtml = await page(sids[0]);
   check(lobbyHtml.includes(NAMES[BOTS - 1]), "все игроки видны в лобби");
-  check(!lobbyHtml.includes("ЗАРАЖЁННЫЙ"), "в лобби роли не показаны");
+  check(!lobbyHtml.includes("ЗАРАЖЁННЫЙ"), "ролей в игре больше нет");
 
   const dup = await act(sids[0], "join", { code, name: "Двойник", avatar: "🦉" });
   check(dup.status !== 303, "повторный вход того же игрока отклонён");
@@ -123,13 +123,17 @@ async function main() {
     "нет серверных ошибок в патчах",
   );
 
-  // приватность: чужой роли в HTML быть не должно, пока она не раскрыта
-  const roles = ["ЗАРАЖЁННЫЙ", "ВРАЧ"];
-  const leaks = streams.filter((s) => {
-    const mentions = roles.filter((r) => stripTags(s).includes(r));
-    return mentions.length > 1; // своя роль видна в досье, чужие — нет
-  });
-  check(leaks.length === 0, `приватность ролей: утечек нет (${leaks.length})`);
+  // приватность: скрытые карты чужих не должны нести значения, ролей нет вовсе
+  const probe = await page(sids[0]);
+  check(!/ЗАРАЖЁННЫЙ|ВРАЧ/.test(probe), "ролей в разметке нет");
+  const hiddenSlots = [
+    ...probe.matchAll(
+      /class="peek-row">\s*<span class="peek-cat">[^<]*<\/span>\s*<span class="peek-val"><\/span>/g,
+    ),
+  ].length;
+  check(hiddenSlots > 0, `скрытые карты без значений (${hiddenSlots} слотов)`);
+  const mine = (probe.match(/class="trait-card/g) || []).length;
+  check(mine <= 5, `своих карт не больше пяти (${mine})`);
 
   // чат: сообщение доходит до остальных
   await act(sids[0], "chat", { text: "Проверка связи", channel: "day" });

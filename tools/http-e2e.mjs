@@ -66,41 +66,34 @@ if ((await phaseOf(H)) === "ПРОБУЖДЕНИЕ") {
   console.log("  · фаза уже не ПРОБУЖДЕНИЕ — проверку таймера пропускаю");
 }
 
-// ---------- ночь: шёпот заражённых, закрытый чат у людей ----------
+// ---------- ночь: чат закрыт у всех, шёпота больше нет ----------
 let night = false;
-for (let i = 0; i < 12; i++) {
+for (let i = 0; i < 14; i++) {
   if ((await phaseOf(H)).includes("НОЧЬ")) {
     night = true;
     break;
   }
   await post(H, "skip");
-  await sleep(800);
+  await sleep(700);
 }
 note(night, `дошли до ночи (${await phaseOf(H)})`);
 if (night) {
   const all = [H, ...sids];
   const pages = {};
   for (const sid of all) pages[sid] = await page(sid);
-  const infected = all.filter((sid) => /name="channel" value="mafia"/.test(pages[sid]));
-  const humans = all.filter((sid) => !infected.includes(sid));
-  note(infected.length >= 1, `ночь: у заражённого канал шёпота (заражённых ${infected.length})`);
   note(
-    humans.length > 0 &&
-      humans.every((sid) => /id="chatInput"[^>]*disabled/.test(chatOf(pages[sid]))),
-    `ночь: у людей поле чата закрыто (${humans.length})`,
+    all.every((sid) => /id="chatInput"[^>]*disabled/.test(chatOf(pages[sid]))),
+    `ночь: у всех чат закрыт (${all.length})`,
   );
-  if (infected.length) {
-    const secret = `шёпот-${stamp % 10000}`;
-    const res = await post(infected[0], "chat", { text: secret, channel: "mafia" });
-    note(res.status === 204, `ночь: шёпот отправлен → ${res.status}`);
-    await sleep(500);
-    note((await page(infected[0])).includes(secret), "ночь: заражённый видит свой шёпот");
-    if (infected[1])
-      note((await page(infected[1])).includes(secret), "ночь: второй заражённый видит шёпот");
-    let leaks = 0;
-    for (const sid of humans) if ((await page(sid)).includes(secret)) leaks++;
-    note(leaks === 0, `ночь: шёпот не утёк людям (проверено ${humans.length})`);
-  }
+  note(
+    all.every((sid) => !/name="channel" value="mafia"/.test(pages[sid])),
+    "ночь: канала «шёпот» больше нет",
+  );
+  const closed = await post(all[0], "chat", { text: "в ночь не пишут", channel: "day" });
+  note(
+    closed.status === 204 && !(await page(all[0])).includes("в ночь не пишут"),
+    "ночь: сообщение не проходит",
+  );
 }
 
 // ---------- лендинг: ошибки вместо тишины ----------

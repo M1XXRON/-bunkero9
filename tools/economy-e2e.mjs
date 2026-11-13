@@ -92,8 +92,8 @@ try {
     ` 15 игроков: старт ${JSON.stringify(big.before)}, расход ${JSON.stringify(big.cost)}`,
   );
 
-  note(small.before.food === 28, `5 игроков: еда = 4·5+8 (${small.before.food})`);
-  note(big.before.food === 68, `15 игроков: еда = 4·15+8 (${big.before.food})`);
+  note(small.before.food === 26, `5 игроков: еда = (R−1)·5+6 (${small.before.food})`);
+  note(big.before.food === 96, `15 игроков: еда = (R−1)·15+6 (${big.before.food})`);
   note(
     big.before.energy > small.before.energy,
     `15 игроков: энергии больше (${big.before.energy} > ${small.before.energy})`,
