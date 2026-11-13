@@ -11,7 +11,7 @@ WEB_LABEL="lol.bunker9.web"
 TUN_LABEL="lol.bunker9.tunnel"
 LOGDIR="$HOME/Library/Logs/bunker9"
 AGENTS="$HOME/Library/LaunchAgents"
-NODE_BIN="$(command -v node)"
+BUN_BIN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
 CFD="${CLOUDFLARED:-$(command -v cloudflared || echo "$HOME/dev/bin/cloudflared")}"
 # Отдельный порт: 3000 обычно занят другими проектами, а совпадение портов
 # по разным семействам адресов (IPv4/IPv6) даёт «сайт отдаёт чужое приложение».
@@ -50,8 +50,8 @@ if [ "${1:-}" = "--remove" ]; then
 	exit 0
 fi
 
-if [ -z "$NODE_BIN" ]; then
-	echo "node не найден в PATH" >&2
+if [ ! -x "$BUN_BIN" ]; then
+	echo "bun не найден: $BUN_BIN" >&2
 	exit 1
 fi
 if [ ! -s "$HOME/.cloudflared/cert.pem" ]; then
@@ -100,7 +100,7 @@ PLIST
 }
 
 # сайт
-write_plist "$WEB_LABEL" "$NODE_BIN" "$ROOT" "server.js"
+write_plist "$WEB_LABEL" "$BUN_BIN" "$ROOT" "run" "server.ts"
 # туннель: параметры берутся из ~/.cloudflared/config.yml
 write_plist "$TUN_LABEL" "$CFD" "$HOME" "tunnel" "run"
 

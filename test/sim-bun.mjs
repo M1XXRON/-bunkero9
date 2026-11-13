@@ -2,8 +2,8 @@
 // Проверяет то же, что старый socket.io-тест: лобби, старт, приватность ролей,
 // каналы чата, голосование и финал.
 //
-//   SITE=http://localhost:3101 node test/sim-bun.mjs
-//   BOTS=15 node test/sim-bun.mjs
+//   SITE=http://localhost:3101 bun test/sim-bun.mjs
+//   BOTS=15 bun test/sim-bun.mjs
 
 const SITE = process.env.SITE || "http://localhost:3101";
 const BOTS = Number(process.env.BOTS || 5);

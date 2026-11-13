@@ -9,9 +9,9 @@
     "check": "bun check",
     "fmt": "bun fmt",
     "fmt:check": "bun fmt --check",
-    "verify": "bun check && bun fmt --check && node test/sim-bun.mjs",
-    "test": "node test/sim-bun.mjs",
-    "test:15": "BOTS=15 node test/sim-bun.mjs",
+    "verify": "bun check && bun fmt --check && bun test/sim-bun.mjs",
+    "test": "bun test/sim-bun.mjs",
+    "test:15": "BOTS=15 bun test/sim-bun.mjs",
     "build": "bun build ./server.ts --compile --bytecode --target=bun-linux-x64 --outfile dist/bunker9",
     "build:local": "bun build ./server.ts --compile --bytecode --outfile dist/bunker9-local",
     "start:bin": "./dist/bunker9"
