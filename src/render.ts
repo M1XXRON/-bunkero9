@@ -110,7 +110,11 @@ function avatar(
   const letter = esc((player.name || "?").slice(0, 1).toUpperCase());
   const idx = (((player.avatarIndex ?? 0) % 8) + 8) % 8;
   const dot = player.connected === false ? '<i class="avatar-dot offline"></i>' : "";
-  return `<span class="avatar avatar-${size} avatar-c${idx}"><span>${letter}</span>${dot}</span>`;
+  // Выбранное на лендинге эмодзи раньше нигде не показывалось — в кружке была
+  // первая буква позывного, и выбор аватара выглядел потерянным.
+  const emoji = String(player.avatar || "").trim();
+  const face = emoji ? `<span class="avatar-emoji">${esc(emoji)}</span>` : `<span>${letter}</span>`;
+  return `<span class="avatar avatar-${size} avatar-c${idx}">${face}${dot}</span>`;
 }
 
 // ---------- верхняя панель ----------

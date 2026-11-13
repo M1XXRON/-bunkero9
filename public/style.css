@@ -894,6 +894,21 @@ input:focus {
   font-size: 12px;
 }
 
+/* эмодзи-аватар: чуть меньше кружка, чтобы не лип к рамке */
+.avatar-emoji {
+  font-size: 0.95em;
+  line-height: 1;
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+  transform: translateY(-0.02em);
+}
+.avatar-xs .avatar-emoji {
+  font-size: 13px;
+}
+.avatar-sm .avatar-emoji {
+  font-size: 17px;
+}
+
 .avatar-c0 {
   background: rgba(94, 152, 141, 0.22);
 }

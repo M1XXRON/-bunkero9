@@ -37,7 +37,11 @@ const PORT = Number(process.env.PORT || 3100);
 // Путь к статике: в компилированном бинарнике import.meta.url указывает внутрь
 // исполняемого файла, поэтому берём каталог запуска (cwd), а не location бандла.
 const PUBLIC = process.env.PUBLIC_DIR ?? `${process.cwd()}/public`;
-const AVATARS = ["🦉", "🐺", "🦊", "🐻", "🦅", "🦌", "🐗", "🦎"];
+// Палитра одна на весь проект: список живёт в src/content.js и его же читает
+// движок для avatarIndex. Раньше здесь был свой список из 8 эмодзи — любой
+// отсутствующий в движке (например 🐗) молча подменялся на 🦉, и выбранная
+// аватарка «пропадала».
+const AVATARS: string[] = require("./src/content.js").AVATARS;
 
 type Session = {
   room: string | null;
@@ -258,11 +262,17 @@ async function readPayload(req: Request): Promise<Record<string, any>> {
 // прежние 204.
 const isFormPost = (req: Request) => (req.headers.get("content-type") ?? "").includes("form");
 
-function landingFail(message: string): Response {
-  return new Response(null, {
-    status: 303,
-    headers: { Location: `/?e=${encodeURIComponent(message)}` },
-  });
+function landingFail(message: string, payload: Record<string, unknown> = {}): Response {
+  // Позывной/аватар/код возвращаем в лендинг: игрок не должен терять выбор
+  // аватара из-за опечатки в коде комнаты.
+  const query = new URLSearchParams({ e: message });
+  const name = typeof payload.name === "string" ? payload.name.trim().slice(0, 16) : "";
+  const avatar = typeof payload.avatar === "string" ? payload.avatar : "";
+  const code = typeof payload.code === "string" ? payload.code.trim().slice(0, 4) : "";
+  if (name) query.set("n", name);
+  if (AVATARS.includes(avatar)) query.set("a", avatar);
+  if (code) query.set("c", code);
+  return new Response(null, { status: 303, headers: { Location: `/?${query}` } });
 }
 
 function fail(session: Session, message: string): Response {
@@ -308,7 +318,7 @@ async function handleAction(
     case "create": {
       if (session.room && session.player)
         return isFormPost(req)
-          ? landingFail("Вы уже в бункере.")
+          ? landingFail("Вы уже в бункере.", payload)
           : fail(session, "Вы уже в бункере.");
       const result = engine.createRoom({
         name: payload.name,
@@ -316,7 +326,7 @@ async function handleAction(
         socketId: sid,
       });
       if (!result.ok)
-        return isFormPost(req) ? landingFail(result.error) : fail(session, result.error);
+        return isFormPost(req) ? landingFail(result.error, payload) : fail(session, result.error);
       session.room = result.room.code;
       session.player = result.player.id;
       session.phaseKey = "";
@@ -334,7 +344,7 @@ async function handleAction(
       // двойной клик по «Войти» не должен плодить второго персонажа
       if (session.room && session.player)
         return isFormPost(req)
-          ? landingFail("Вы уже в бункере.")
+          ? landingFail("Вы уже в бункере.", payload)
           : fail(session, "Вы уже в бункере.");
       const result = engine.joinRoom({
         code: payload.code,
@@ -343,7 +353,7 @@ async function handleAction(
         socketId: sid,
       });
       if (!result.ok)
-        return isFormPost(req) ? landingFail(result.error) : fail(session, result.error);
+        return isFormPost(req) ? landingFail(result.error, payload) : fail(session, result.error);
       session.room = result.room.code;
       session.player = result.player.id;
       session.phaseKey = "";
@@ -424,11 +434,19 @@ async function handleAction(
 const escText = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function landingHtml(origin: string, error = ""): string {
+function landingHtml(origin: string, error = "", keep: Record<string, string> = {}): string {
   const problem = error ? escText(error).slice(0, 200) : "";
+  // Выбор игрока переживает неудачную попытку: иначе после любого отказа
+  // (код с опечаткой, партия уже началась) позывной и аватар сбрасывались на
+  // самые первые, и выглядело так, будто выбранное эмодзи «пропало».
+  const chosenAvatar = AVATARS.includes(keep.avatar) ? keep.avatar : AVATARS[0];
+  const name = escText(keep.name || "").slice(0, 16);
+  const code = escText(keep.code || "")
+    .slice(0, 4)
+    .toUpperCase();
   const avatars = AVATARS.map(
     (a, i) =>
-      `<input type="radio" name="avatar" id="av${i}" value="${a}" ${i === 0 ? "checked" : ""}><label for="av${i}">${a}</label>`,
+      `<input type="radio" name="avatar" id="av${i}" value="${a}" ${a === chosenAvatar ? "checked" : ""}><label for="av${i}">${a}</label>`,
   ).join("");
   return `<!doctype html>
 <html lang="ru"><head>
@@ -439,7 +457,7 @@ function landingHtml(origin: string, error = ""): string {
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=3">
+<link rel="stylesheet" href="/style.css?v=4">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <main class="landing-main">
@@ -453,15 +471,15 @@ function landingHtml(origin: string, error = ""): string {
     ${problem ? `<p class="toast show">${problem}</p>` : ""}
     <form method="post" action="/act/create" class="stack">
       <span class="eyebrow">СОЗДАТЬ БУНКЕР</span>
-      <label>Позывной <input name="name" maxlength="16" required placeholder="Например, Ворон"></label>
+      <label>Позывной <input name="name" maxlength="16" required placeholder="Например, Ворон" value="${name}"></label>
       <fieldset class="avatars">${avatars}</fieldset>
       <button class="btn btn-primary btn-wide" type="submit">Открыть бункер</button>
     </form>
     <form method="post" action="/act/join" class="stack">
       <span class="eyebrow">ВОЙТИ ПО КОДУ</span>
       <div class="join-row">
-        <input name="code" maxlength="4" required placeholder="КОД" class="code-input">
-        <input name="name" maxlength="16" required placeholder="Позывной">
+        <input name="code" maxlength="4" required placeholder="КОД" class="code-input" value="${code}">
+        <input name="name" maxlength="16" required placeholder="Позывной" value="${name}">
       </div>
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
       <button class="btn btn-secondary btn-wide" type="submit">Войти</button>
@@ -481,7 +499,7 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=3">
+<link rel="stylesheet" href="/style.css?v=4">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
@@ -617,7 +635,12 @@ Bun.serve({
         });
       }
       const note = url.searchParams.get("e") || "";
-      return new Response(landingHtml(origin, note), {
+      const keep = {
+        name: url.searchParams.get("n") || "",
+        avatar: url.searchParams.get("a") || "",
+        code: url.searchParams.get("c") || "",
+      };
+      return new Response(landingHtml(origin, note, keep), {
         headers: { "content-type": "text/html; charset=utf-8", ...cookieFor(sid) },
       });
     }

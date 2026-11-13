@@ -143,6 +143,26 @@ const head = await page(H);
 note(/rel="icon"[^>]*favicon\.svg/.test(head), "страница объявляет svg-иконку для вкладки");
 note(/rel="apple-touch-icon"/.test(head), "страница объявляет иконку для iOS");
 
+// ---------- аватар: выбор на лендинге должен доехать до лобби ----------
+const landingNow = await (await fetch(`${SITE}/`)).text();
+const palette = [...landingNow.matchAll(/name="avatar" id="av\d+" value="([^"]+)"/g)].map(
+  (m) => m[1],
+);
+note(palette.length >= 16, `лендинг: ${palette.length} аватарок на выбор`);
+note(new Set(palette).size === palette.length, "лендинг: аватарки не повторяются");
+
+if (palette.length) {
+  const emoji = palette[palette.length - 1];
+  const sidAvatar = `he-avatar-${stamp}`;
+  await post(sidAvatar, "create", { name: "Аватар", avatar: emoji });
+  const lobbyHtml = await page(sidAvatar);
+  note(
+    lobbyHtml.includes(`avatar-emoji">${emoji}`),
+    `аватар ${emoji} виден в лобби (не подменён на 🦉)`,
+  );
+  await post(sidAvatar, "leave", {});
+}
+
 // ---------- уборка: выходим из комнаты ----------
 for (const sid of [H, ...sids]) await post(sid, "leave", {});
 
