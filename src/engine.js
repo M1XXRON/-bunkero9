@@ -574,7 +574,7 @@ function beginDay(room) {
   room.resources.energy = round1(Math.max(0, room.resources.energy - powerCost));
   const signed = (value) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(round1(value))}`;
   const modifiers = [
-    cost.crewEat ? `повар: ${signed(cost.crewEat)} на человека` : '',
+    cost.crewEat ? `кухня: ${signed(cost.crewEat)} на человека` : '',
     cost.personalEat ? `личные нормы ${signed(cost.personalEat)}` : '',
     cost.crewPower ? `электрик: ${signed(cost.crewPower)} к энергии` : '',
   ].filter(Boolean);

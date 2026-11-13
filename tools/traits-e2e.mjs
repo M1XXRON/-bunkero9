@@ -102,7 +102,7 @@ function neutralise(target) {
   engine.skipPhase(r.code, r.hostId); // интро -> день
   const line = r.messages.map((m) => m.text).find((t) => t.startsWith("Расход бункера"));
   note(/еда −2\.5/.test(line || ""), `в ленте расход: «${line}»`);
-  note(/повар/.test(line || ""), "в ленте есть пояснение модификатора");
+  note(/кухня/.test(line || ""), "в ленте есть пояснение модификатора");
 }
 
 // ---------- 7. без ключа характеристики остаются управляемыми ----------
