@@ -625,40 +625,59 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#12151c">
-<title>БУНКЕР·9 — Сигнал тишины</title>
+<meta name="theme-color" content="#101010">
+<title>БУНКЕР·9 — Бункер онлайн</title>
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css?v=6">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
+<header class="landing-top">
+  <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
+  <span class="landing-top-note">бесплатная браузерная игра · без установки</span>
+</header>
 <main class="landing-main">
   <section class="landing-hero">
-    <h1 class="wordmark">БУНКЕР<span class="wordmark-mark">·9</span></h1>
-    <p class="tagline">Сигнал тишины</p>
-    <p class="prose">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь. И кто-то внутри не был человеком ещё вчера.</p>
-    <ul class="facts"><li>5–15 игроков</li><li>день и ночь</li><li>один голос — один изгнанный</li></ul>
+    <div class="hero-tags">
+      <span class="tag">5–15 игроков</span>
+      <span class="tag">день и ночь</span>
+      <span class="tag">≈20 минут</span>
+    </div>
+    <h1 class="hero-title">БУНКЕР<span class="accent">·9</span></h1>
+    <p class="hero-lead">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь, и кто-то внутри не был человеком ещё вчера. Один голос — один изгнанный.</p>
   </section>
-  <section class="landing-card panel">
-    ${problem ? `<p class="toast show">${problem}</p>` : ""}
-    <form method="post" action="/act/create" class="stack">
-      <span class="eyebrow">СОЗДАТЬ БУНКЕР</span>
-      <label>Позывной <input name="name" maxlength="16" required placeholder="Например, Ворон" value="${name}"></label>
+
+  <section class="landing-forms">
+    <form method="post" action="/act/create" class="landing-card">
+      <span class="eyebrow">СОЗДАТЬ ИГРУ</span>
+      <h2>Открыть бункер</h2>
+      ${problem ? `<p class="toast">${problem}</p>` : ""}
+      <label class="field">Позывной
+        <input name="name" maxlength="16" required placeholder="Например, Ворон" value="${name}">
+      </label>
       <fieldset class="avatars">${avatars}</fieldset>
-      <button class="btn btn-primary btn-wide" type="submit">Открыть бункер</button>
+      <button class="btn btn-primary btn-wide" type="submit">Создать игру</button>
     </form>
-    <form method="post" action="/act/join" class="stack">
-      <span class="eyebrow">ВОЙТИ ПО КОДУ</span>
-      <div class="join-row">
+
+    <form method="post" action="/act/join" class="landing-card">
+      <span class="eyebrow">ПОДКЛЮЧИТЬСЯ</span>
+      <h2>Войти по коду</h2>
+      <label class="field">Код комнаты
         <input name="code" maxlength="4" required placeholder="КОД" class="code-input" value="${code}">
+      </label>
+      <label class="field">Позывной
         <input name="name" maxlength="16" required placeholder="Позывной" value="${name}">
-      </div>
+      </label>
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
-      <button class="btn btn-secondary btn-wide" type="submit">Войти</button>
+      <button class="btn btn-secondary btn-wide" type="submit">Подключиться</button>
     </form>
-    <p class="note">Адрес: ${origin}</p>
   </section>
+
+  <p class="landing-foot">Адрес: ${origin}</p>
 </main></body></html>`;
 }
 
@@ -667,12 +686,15 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#12151c">
+<meta name="theme-color" content="#101010">
 <title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
 <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="/style.css?v=5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css?v=6">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">

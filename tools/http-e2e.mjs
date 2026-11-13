@@ -111,7 +111,7 @@ note(
   `лендинг: неверный код → ${bad.status} ${badLoc}`,
 );
 const badPage = await (await fetch(`${SITE}${badLoc}`)).text();
-note(/toast show/.test(badPage) && /не найден/i.test(badPage), "лендинг: текст ошибки показан");
+note(/class="toast"/.test(badPage) && /не найден/i.test(badPage), "лендинг: текст ошибки показан");
 
 const escaped = await (
   await fetch(`${SITE}/?e=${encodeURIComponent("<script>alert(1)</script>")}`)

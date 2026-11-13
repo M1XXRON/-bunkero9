@@ -1,7 +1,10 @@
 // Рендер состояния в HTML. Фрагменты патчатся в браузер через Datastar (SSE),
 // поэтому у каждого игрока свой HTML: роли и скрытые карты не утекают.
 //
-// Классы и разметка — под public/style.css (единственный стиль нового клиента).
+// Классы и разметка — под public/style.css. Оформление взято по мотивам
+// «Убежища 42» (shelter42.ru): почти чёрный фон, крупная типографика Onest,
+// оранжевый акцент #ff3500, карточки 20px, строки-списки с разделителями.
+// Игровые правила и хендлеры при этом не менялись.
 
 export type Player = {
   id: string;
@@ -111,8 +114,7 @@ function avatar(
   const letter = esc((player.name || "?").slice(0, 1).toUpperCase());
   const idx = (((player.avatarIndex ?? 0) % 8) + 8) % 8;
   const dot = player.connected === false ? '<i class="avatar-dot offline"></i>' : "";
-  // Выбранное на лендинге эмодзи раньше нигде не показывалось — в кружке была
-  // первая буква позывного, и выбор аватара выглядел потерянным.
+  // В кружке — выбранное на лендинге эмодзи, буква только как запасной вариант.
   const emoji = String(player.avatar || "").trim();
   const face = emoji ? `<span class="avatar-emoji">${esc(emoji)}</span>` : `<span>${letter}</span>`;
   return `<span class="avatar avatar-${size} avatar-c${idx}">${face}${dot}</span>`;
@@ -123,19 +125,16 @@ function avatar(
 // Крестик стоит рядом с «Правилами» и на телефоне его ловят пальцем мимо: в
 // партии выход = смерть с раскрытием роли, так что спрашиваем подтверждение.
 function leaveButton(snap: Snapshot): string {
-  const title = ' title="Выйти"';
   if (snap.state === "lobby")
-    return `<button class="icon-btn"${title} data-on:click="@post('/act/leave', {retry: 'never'})">×</button>`;
-  return `<button class="icon-btn"${title} data-on:click="confirm('Выйти из бункера? Персонаж погибнет, роль раскроется.') && @post('/act/leave', {retry: 'never'})">×</button>`;
+    return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="@post('/act/leave', {retry: 'never'})">×</button>`;
+  return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="confirm('Выйти из бункера? Персонаж погибнет, роль раскроется.') && @post('/act/leave', {retry: 'never'})">×</button>`;
 }
 
 function topbar(snap: Snapshot): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
-  // Внимание: __ifmissing здесь нельзя. Топбар морфится на каждом патче, а сигнал
-  // endsAt живёт дольше элемента: с __ifmissing таймер замирал на значении первой
-  // фазы (0с на всю партию). Поэтому endsAt перезаписывается каждый раз, а left
-  // сервер считает сам — чтобы цифра была верной сразу после патча.
+  // __ifmissing здесь нельзя: топбар морфится на каждом патче, а сигнал живёт
+  // дольше элемента — таймер замирал на значении первой фазы.
   const timer = snap.phaseEndsAt
     ? `<span class="phase-timer"
          data-signals="{endsAt: ${snap.phaseEndsAt}, left: ${Math.max(0, Math.round((snap.phaseEndsAt - Date.now()) / 1000))}}"
@@ -147,27 +146,31 @@ function topbar(snap: Snapshot): string {
   const low = (value: number, limit: number) => (value <= limit ? " low" : "");
   return `
   <header class="topbar" id="topbar">
-    <div class="topbar-brand">
-      <span class="wordmark-mark">9</span>
-      <span class="wordmark-text">БУНКЕР·9</span>
+    <div class="topbar-left">
+      <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
+      <button class="pill room-pill" title="Скопировать код"
+        data-on:click="navigator.clipboard?.writeText('${esc(snap.code)}')">
+        <span class="room-code">${esc(snap.code)}</span><span class="room-copy">копировать</span>
+      </button>
     </div>
-    <button class="room-code-chip" data-on:click="navigator.clipboard?.writeText('${esc(snap.code)}')">
-      ${esc(snap.code)} <span class="chip-copy">копировать</span>
-    </button>
-    <div class="top-phase">
+
+    <div class="topbar-center">
       <span class="phase-chip tone-${tone}">${esc(PHASE_CHIP[snap.state] || "")}</span>
       ${snap.state !== "lobby" ? `<span class="phase-day">день ${snap.day}</span>` : ""}
       ${timer}
     </div>
-    <div class="resources">
-      <span class="resource${low(res.food, snap.aliveCount)}">ЕДА <b>${res.food}</b></span>
-      <span class="resource${low(res.energy, 2)}">ЭНЕРГИЯ <b>${res.energy}</b></span>
-      <span class="resource${low(res.meds, 0)}">МЕДЫ <b>${res.meds}</b></span>
-    </div>
-    <div class="top-actions">
-      <button class="btn btn-secondary btn-small" data-on:click="document.getElementById('dossier').showModal()">Досье</button>
-      <button class="btn btn-ghost btn-small" data-on:click="document.getElementById('rules').showModal()">Правила</button>
-      ${leaveButton(snap)}
+
+    <div class="topbar-right">
+      <div class="resources">
+        <span class="res${low(res.food, snap.aliveCount)}"><i>еда</i><b>${res.food}</b></span>
+        <span class="res${low(res.energy, 2)}"><i>энергия</i><b>${res.energy}</b></span>
+        <span class="res${low(res.meds, 0)}"><i>меды</i><b>${res.meds}</b></span>
+      </div>
+      <div class="top-actions">
+        <button class="pill" data-on:click="document.getElementById('dossier').showModal()">Досье</button>
+        <button class="pill pill-ghost" data-on:click="document.getElementById('rules').showModal()">Правила</button>
+        ${leaveButton(snap)}
+      </div>
     </div>
   </header>`;
 }
@@ -189,17 +192,34 @@ function lobby(snap: Snapshot, origin: string): string {
           <div class="lobby-player-meta">${p.isBot ? "под управлением сервера" : p.connected ? "на связи" : "нет связи"}</div>
         </div>
         ${
+          p.isBot
+            ? '<span class="status ok"><i></i>бот</span>'
+            : p.connected
+              ? '<span class="status ok"><i></i>в сети</span>'
+              : '<span class="status"><i></i>офлайн</span>'
+        }
+        ${
           snap.me.isHost && p.id !== snap.me.id
-            ? `<button class="kick-btn" data-on:click="@post('/act/kick', {payload: {target: '${p.id}'}, retry: 'never'})" title="Исключить">×</button>`
+            ? `<button class="row-action" data-on:click="@post('/act/kick', {payload: {target: '${p.id}'}, retry: 'never'})" title="Исключить" aria-label="Исключить">×</button>`
             : ""
         }
       </div>`,
     )
     .join("");
 
-  const empty = Array.from({ length: Math.max(0, snap.maxPlayers - snap.players.length) })
-    .map(() => '<div class="lobby-player empty">свободно</div>')
-    .join("");
+  // Пустые места не растягиваем на весь список: 14 пунктирных строк вытесняли
+  // кнопку старта. Показываем до восьми и подписываем остаток.
+  const freeSeats = Math.max(0, snap.maxPlayers - snap.players.length);
+  const shownSeats = Math.min(freeSeats, 8);
+  const empty = freeSeats
+    ? `<div class="lobby-empty-seats">${Array.from({ length: shownSeats })
+        .map(() => '<div class="lobby-player empty"><span class="seat-dash">—</span>свободно</div>')
+        .join("")}${
+        freeSeats > shownSeats
+          ? `<div class="lobby-player empty more"><span class="seat-dash">+</span>ещё ${freeSeats - shownSeats} мест</div>`
+          : ""
+      }</div>`
+    : "";
 
   const canStart = snap.me.isHost && snap.players.length >= snap.minPlayers;
   const startLabel = !snap.me.isHost
@@ -210,22 +230,23 @@ function lobby(snap: Snapshot, origin: string): string {
 
   return `
   <div class="lobby-body">
-    <section class="invite-card panel">
-      <div class="invite-body">
-        <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
-        <h1>Код бункера <b>${esc(snap.code)}</b></h1>
-        <p>Отправьте друзьям код и адрес: <b>${esc(origin)}</b></p>
-        <div class="invite-meta">
-          <span><b>${snap.players.filter((p) => p.connected).length}</b> на связи</span>
-          <span><b>${snap.players.length}</b> / ${snap.maxPlayers} мест</span>
-          <span>заражённых: <b>${snap.preview.infected}</b></span>
-        </div>
+    <section class="panel invite-card">
+      <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
+      <h1>Код бункера <b>${esc(snap.code)}</b></h1>
+      <p class="invite-text">Отправьте друзьям код и адрес: <b>${esc(origin)}</b></p>
+      <div class="meta-row">
+        <span class="status ok"><i></i>${snap.players.filter((p) => p.connected).length} на связи</span>
+        <span class="chip">${snap.players.length} / ${snap.maxPlayers} мест</span>
+        <span class="chip chip-warn">заражённых ${snap.preview.infected}</span>
       </div>
     </section>
 
     <section class="panel players-lobby-panel">
       <header class="panel-head">
-        <div><span class="eyebrow">СПИСОК ВЫЖИВШИХ</span><h2>Кто внутри</h2></div>
+        <div>
+          <span class="eyebrow">СПИСОК ВЫЖИВШИХ</span>
+          <h2>Кто внутри</h2>
+        </div>
         <span class="seat-count">${snap.players.length} / ${snap.maxPlayers}</span>
       </header>
       <div class="lobby-players">${seats}${empty}</div>
@@ -265,7 +286,7 @@ function playersPanel(snap: Snapshot): string {
   const rows = snap.players
     .map((p) => {
       const status = !p.alive
-        ? `<span class="pstatus dead">${p.left ? "вышел" : p.death?.cause === "exile" ? "изгнан" : "погиб"}</span>`
+        ? `<span class="status dead"><i></i>${p.left ? "вышел" : p.death?.cause === "exile" ? "изгнан" : "погиб"}</span>`
         : "";
       const role = p.role
         ? `<span class="prole tone-${p.role}">${esc(p.roleLabel || ROLE_NAME[p.role] || "")}</span>`
@@ -276,6 +297,7 @@ function playersPanel(snap: Snapshot): string {
           ${avatar(p, "xs")}
           <span class="pname">${esc(p.name)}</span>
           ${p.teammate ? '<span class="mini-badge mafia">свой</span>' : ""}
+          ${p.isBot ? '<span class="mini-badge bot">бот</span>' : ""}
           ${status}${role}${votes}
           <span class="pdots">${"●".repeat(p.traitsRevealed)}${"○".repeat(Math.max(0, p.totalTraits - p.traitsRevealed))}</span>
         </div>`;
@@ -284,7 +306,10 @@ function playersPanel(snap: Snapshot): string {
   return `
     <section class="panel players-panel">
       <header class="panel-head">
-        <div><span class="eyebrow">В БУНКЕРЕ</span><h2>Выжившие</h2></div>
+        <div>
+          <span class="eyebrow">В БУНКЕРЕ</span>
+          <h2>Выжившие</h2>
+        </div>
         <span class="seat-count">${snap.aliveCount} / ${snap.players.length}</span>
       </header>
       <div class="players-list">${rows}</div>
@@ -369,7 +394,7 @@ function voteScene(snap: Snapshot): string {
       <p>Изгнанный покидает бункер навсегда, и его роль становится известна. При равенстве голосов не уходит никто.</p>
       <div class="target-grid">${cards}</div>
       <div class="vote-tools">
-        <button class="skip-vote ${me.votedFor === "skip" ? "selected" : ""}"
+        <button class="chip skip-vote ${me.votedFor === "skip" ? "selected" : ""}"
           data-on:click="@post('/act/vote', {payload: {target: 'skip'}, retry: 'never'})">Воздержаться</button>
         <span class="note">${esc(waiting)}</span>
       </div>
@@ -433,7 +458,7 @@ function nightScene(snap: Snapshot): string {
         <h3>Кого спасти?</h3>
         <p>Медикаментов в бункере: <b>${snap.resources.meds}</b>. Попытка спасти тратит один.</p>
         <div class="target-grid">${cards}</div>
-        <button class="skip-vote ${me.doctorSkip ? "selected" : ""}"
+        <button class="chip skip-vote ${me.doctorSkip ? "selected" : ""}"
           data-on:click="@post('/act/doctor-skip', {retry: 'never'})">Не тратить медикаменты</button>
       </div>`;
   }
@@ -490,15 +515,26 @@ function scene(snap: Snapshot): string {
     night: () => nightScene(snap),
     end: () => endScene(snap),
   };
+  const titles: Record<string, string> = {
+    intro: "Роли розданы",
+    reveal: "Раскрытие карт",
+    discussion: "Обсуждение",
+    vote: "Голосование",
+    night: "Свет гаснет",
+    end: "Протокол завершён",
+  };
   const body = (byState[snap.state] || (() => '<p class="note">Ждём начала…</p>'))();
   const host =
     snap.me.isHost && snap.state !== "end"
-      ? `<button class="btn btn-ghost btn-small skip-phase" data-on:click="@post('/act/skip', {retry: 'never'})">Пропустить фазу</button>`
+      ? `<button class="chip skip-phase" data-on:click="@post('/act/skip', {retry: 'never'})">Пропустить фазу</button>`
       : "";
   return `
     <section class="panel scene-panel">
       <header class="panel-head">
-        <div><span class="eyebrow">${esc(PHASE_CHIP[snap.state] || "")}${snap.day ? ` · ДЕНЬ ${snap.day}` : ""}</span></div>
+        <div>
+          <span class="eyebrow">${snap.day ? `ДЕНЬ ${snap.day}` : "ПАРТИЯ"}</span>
+          <h2>${esc(titles[snap.state] || "Ход партии")}</h2>
+        </div>
         ${host}
       </header>
       ${eventCard(snap)}
@@ -513,7 +549,7 @@ function feedHtml(snap: Snapshot, activeTab = "day"): string {
     .slice(-60)
     .map((m) => {
       if (m.kind === "chat") {
-        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span>${esc(m.text)}</span></div>`;
+        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span class="chat-text">${esc(m.text)}</span></div>`;
       }
       return `<div class="chat-system tone-${esc(m.tone || "info")}">${esc(m.text)}</div>`;
     })
@@ -538,16 +574,17 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
           )
           .join("")}</div>`
       : "";
+
   return `
     <section class="panel chat-panel">
-      <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Лобби</h2></div></header>
+      <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Чат</h2></div></header>
       <div id="chatTabs">${tabs}</div>
       <div class="chat-feed" id="chatFeed" role="log" aria-live="polite" aria-relevant="additions" aria-label="Лента чата">${feedHtml(snap, activeTab)}</div>
       <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
         <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в ${{ day: "зал", mafia: "шёпот", dead: "мёртвых" }[activeTab] || "зал"}…"
           data-bind="msg" data-preserve-attr="value" ${allowed.length ? "" : "disabled"}>
         <input type="hidden" name="channel" value="${activeTab}">
-        <button type="submit" class="send-btn" ${allowed.length ? "" : "disabled"}>→</button>
+        <button type="submit" class="send-btn" ${allowed.length ? "" : "disabled"} aria-label="Отправить">→</button>
       </form>
     </section>`;
 }
@@ -615,8 +652,8 @@ function rules(): string {
 }
 
 // ---------- сборка ответов ----------
-// Контракт стилей: #game — flex-колонка, прямыми потомками идут #topbar и
-// #board (он же .game-grid), внутри — три колонки. Патчи заменяют эти узлы.
+// Контракт: #topbar и #board патчатся целиком, диалоги живут в оболочке.
+// #board в партии — он же .game-grid (три колонки), в лобби — .lobby-main.
 
 export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
   const signals = `{reveal: false, msg: ''}`;
@@ -687,7 +724,7 @@ export function renderFeed(snap: Snapshot, activeTab: string): string {
     .slice(-60)
     .map((m) => {
       if (m.kind === "chat") {
-        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span>${esc(m.text)}</span></div>`;
+        return `<div class="chat-msg"><span class="chat-author">${esc(m.author)}</span><span class="chat-text">${esc(m.text)}</span></div>`;
       }
       return `<div class="chat-system tone-${esc(m.tone || "info")}">${esc(m.text)}</div>`;
     })
