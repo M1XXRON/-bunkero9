@@ -988,7 +988,6 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
-<script type="module" src="/voice.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
 ${renderApp(snapshot, origin, tab)}
@@ -1231,7 +1230,6 @@ Bun.serve({
     for (const name of [
       "/style.css",
       "/sound.js",
-      "/voice.js",
       "/favicon.svg",
       "/favicon-32.png",
       "/apple-touch-icon.png",

@@ -140,11 +140,6 @@ try {
   note(Boolean(line && line.length > 5), `причина ночной потери генерируется («${line}»)`);
   const hintsFromAi = await ai.generateHints("день 2, живых 5");
   note(Array.isArray(hintsFromAi) && hintsFromAi.length >= 2, "модель отдаёт 2–3 наводки");
-
-  const voice = await fetch(`${SITE}/voice.js`);
-  note(voice.status === 200, `голосовой скрипт отдаётся (${voice.status})`);
-  const appHtml = await page(H);
-  note(/voice\.js/.test(appHtml), "voice.js подключён в игровом документе");
 } finally {
   server.kill("SIGTERM");
   await sleep(300);
