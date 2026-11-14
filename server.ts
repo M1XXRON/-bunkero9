@@ -439,7 +439,7 @@ function driveBots(room: any): void {
   }
 
   // В раскрытии ключ включает ход: иначе бот сходил бы один раз за фазу.
-  const key = `${room.gameId}:${room.state}:${room.day}:${room.turn?.index ?? ""}:${room.turn?.stage ?? ""}`;
+  const key = `${room.gameId}:${room.state}:${room.day}:${room.turn?.pass ?? ""}:${room.turn?.index ?? ""}:${room.turn?.stage ?? ""}`;
   if (botPhase.get(room.code) === key) return;
   botPhase.set(room.code, key);
 

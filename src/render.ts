@@ -105,6 +105,8 @@ export type Snapshot = {
     stage: "reveal" | "confirm" | "done";
     index: number;
     total: number;
+    pass: number;
+    passes: number;
     order: {
       id: string;
       name: string;
@@ -626,7 +628,7 @@ function revealScene(snap: Snapshot): string {
     const last = me.traits.find((t) => t.revealed);
     if (turn.stage === "confirm" || !me.canReveal) {
       return `<div class="action-block">
-        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}</span>
+        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}</span>
         <h3>Карта на столе</h3>
         <p>${last ? `Все видят: <b>${esc(last.label)} — ${esc(last.value)}</b>.` : "Раскрывать больше нечего."}</p>
         <p class="note">Подтвердите конец хода — очередь перейдёт к следующему выжившему.</p>
@@ -647,8 +649,8 @@ function revealScene(snap: Snapshot): string {
       )
       .join("");
     return `<div class="action-block">
-        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}</span>
-        <h3>Покажите одну карту</h3>
+        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}</span>
+        <h3>${turn.pass === 2 ? "Второй круг: покажите ещё одну карту" : "Покажите одну карту"}</h3>
         <p>Один факт станет публичным навсегда. Выбирайте осторожно — потом подтвердите конец хода.</p>
         <div class="trait-grid">${cards}</div>
         ${turnStrip(snap)}
@@ -658,10 +660,10 @@ function revealScene(snap: Snapshot): string {
   // чужой ход
   const who = turn?.name || "следующий";
   return `<div class="action-block">
-      <span class="eyebrow">РАСКРЫТИЕ · ${turn ? `${turn.index} / ${turn.total}` : ""}</span>
+      <span class="eyebrow">РАСКРЫТИЕ · ${turn ? `${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}` : ""}</span>
       <h3>Сейчас ход: ${esc(who)}</h3>
       <p>Выжившие открывают по одной карте по очереди. ${turn?.stage === "confirm" ? "Карта на столе — ждём подтверждения хода." : "Смотрите и запоминайте."}</p>
-      <p class="note">Свои карты всегда видны слева — их можно перечитать в любой момент.</p>
+      <p class="note">${turn && turn.passes > 1 && turn.pass === 1 ? "Первый день: после круга будет второй — каждый раскроет ещё одну карту." : "Свои карты всегда видны слева — их можно перечитать в любой момент."}</p>
       ${turnStrip(snap)}
     </div>`;
 }
@@ -1025,7 +1027,7 @@ function rules(snap: Snapshot): string {
         <div class="modal-section">
           <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня и только если еда и энергия не на нуле: без связи сигнал не уходит. Спасаются все, кто к тому моменту жив.</p>
           <p><b>Сценарий.</b> Партия начинается без таймера: прочитайте катастрофу и нажмите «Я прочитал». Когда прочитают все (или хост откроет день), начнётся раскрытие.</p>
-          <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
+          <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. В первый день каждый раскрывает две карты. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
           <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
           <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+${nzFood} еды, +${nzEnergy} энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>

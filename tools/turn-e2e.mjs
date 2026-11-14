@@ -117,9 +117,17 @@ try {
   note((await cards(others[0])) === 8, "ход перешёл ко второму игроку");
   note((await cards(HOST)) === 0, "у хоста ход закончился");
 
-  // доигрываем очередь до конца
+  // доигрываем первый круг
   for (const sid of others) {
     await act(sid, "reveal", { index: 0 });
+    await sleep(250);
+    await act(sid, "end-turn");
+    await sleep(250);
+  }
+  // первый день — второй круг, очередь начинается с хоста
+  for (const sid of [HOST, ...others]) {
+    if (!(await phase(HOST)).includes("РАССВЕТ")) break;
+    await act(sid, "reveal", { index: 1 });
     await sleep(250);
     await act(sid, "end-turn");
     await sleep(250);

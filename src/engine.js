@@ -305,6 +305,15 @@ function alivePlayers(room) {
   return room.players.filter((player) => player.alive);
 }
 
+// Очередь раскрытия сдвигается каждый день: первый и последний не закреплены
+// за одними и теми же игроками. В первый день порядок исходный.
+function turnOrder(room) {
+  const alive = alivePlayers(room).filter((player) => !player.left);
+  if (!alive.length) return [];
+  const offset = Math.max(0, room.day - 1) % alive.length;
+  return [...alive.slice(offset), ...alive.slice(0, offset)].map((player) => player.id);
+}
+
 function connectedPlayers(room) {
   return room.players.filter((player) => player.connected);
 }
@@ -480,9 +489,10 @@ function resumeRoom(room) {
   // старая комната (до пошагового раскрытия) или сброс после рестарта
   if (room.state === 'reveal' && !room.turn) {
     room.turn = {
-      order: alivePlayers(room).map((player) => player.id),
+      order: turnOrder(room),
       index: 0,
       stage: 'reveal',
+      pass: room.turn?.pass || 1,
     };
   }
   if (room.state === 'reveal' && room.turn) {
@@ -580,6 +590,7 @@ function startTurn(room) {
         order,
         index,
         stage: player.revealedThisRound || !hidden ? 'confirm' : 'reveal',
+        pass: room.turn?.pass || 1,
       };
       const ms = turnMs(room);
       room.timeoutFn = () => revealTimeout(room);
@@ -589,13 +600,25 @@ function startTurn(room) {
     }
     index += 1;
   }
-  room.turn = { order, index: order.length, stage: 'done' };
+  room.turn = { order, index: order.length, stage: 'done', pass: room.turn?.pass || 1 };
   return null;
 }
 
 function advanceTurn(room) {
   if (room.state !== 'reveal' || !room.turn) return;
   room.turn.index += 1;
+  // Первый день — два круга: каждый раскрывает по две карты. После первого
+  // круга очередь начинается заново с тем же сдвигом по дню.
+  if (
+    room.day === 1 &&
+    (room.turn.pass || 1) === 1 &&
+    room.turn.index >= room.turn.order.length
+  ) {
+    room.turn.pass = 2;
+    room.turn.index = 0;
+    for (const player of alivePlayers(room)) player.revealedThisRound = false;
+    system(room, 'Первый день · второй круг: ещё одна карта от каждого.', 'phase');
+  }
   const next = startTurn(room);
   if (next) {
     changed(room);
@@ -726,12 +749,19 @@ function beginDay(room) {
   room.night = null;
 
   room.turn = {
-    order: alivePlayers(room).map((player) => player.id),
+    order: turnOrder(room),
     index: 0,
     stage: 'reveal',
+    pass: 1,
   };
   startPhase(room, 'reveal', turnMs(room), () => revealTimeout(room));
-  system(room, 'Раскрытие карт. По очереди: один факт о себе — для всех.', 'phase');
+  system(
+    room,
+    room.day === 1
+      ? 'Раскрытие карт. Первый день — по две карты с каждого, по очереди.'
+      : 'Раскрытие карт. По очереди: один факт о себе — для всех.',
+    'phase',
+  );
   const first = startTurn(room);
   if (first) changed(room);
   else finishReveal(room);
@@ -1598,6 +1628,8 @@ function serializeFor(room, viewer) {
           stage: room.turn.stage,
           index: Math.min(room.turn.index + 1, room.turn.order.length),
           total: room.turn.order.length,
+          pass: room.turn.pass || 1,
+          passes: room.day === 1 ? 2 : 1,
           order: room.turn.order
             .map((id, position) => {
               const player = playerById(room, id);

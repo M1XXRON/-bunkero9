@@ -154,6 +154,18 @@ const hostIdOf = (room) => room.hostId;
   note(room.winner === "survived", `с запасами — спасение (${room.winner})`);
 }
 
+// ---------- 5c. очередь раскрытия сдвигается по дням ----------
+{
+  const { room, host } = makeRoom(5);
+  engine.startGame(room, host.id);
+  engine.skipPhase(room.code, host.id); // интро -> день 1
+  const first = room.turn.order[0];
+  engine.skipPhase(room.code, host.id); // раскрытие -> обсуждение
+  engine.skipPhase(room.code, host.id); // обсуждение -> голосование
+  engine.skipPhase(room.code, host.id); // голосование -> день 2
+  note(room.turn.order[0] !== first, "на второй день очередь начинается с другого игрока");
+}
+
 // ---------- 6. боты после рестарта ----------
 {
   const { room, host } = makeRoom(2);
