@@ -68,6 +68,10 @@ function neutralise(target) {
   const cost = engine.dailyCost(r);
   note(cost.food === 6, `двое едят больше: еда ${cost.food}`);
   note(cost.personalEat === 1, `личные надбавки: +${cost.personalEat}`);
+  r.players[1].traits.find((t) => t.cat === "health").revealed = true;
+  const snapshot = engine.serializeFor(r, r.players[2]);
+  const health = snapshot.players[1].traitSlots.find((slot) => slot.cat === "health");
+  note(health.impact?.kind === "drain", `болезнь подсвечена красным (${health.impact?.label})`);
 }
 
 // ---------- 4. электрик экономит энергию ----------
@@ -99,6 +103,14 @@ function neutralise(target) {
   note(beforeReveal <= before, "на старте припасы не начисляются");
   const line = r.messages.map((m) => m.text).find((t) => t.includes("вскрывает"));
   note(/еда \+5/.test(line || ""), `в ленте: «${line}»`);
+  const revealMsg = r.messages.filter((m) => m.kind === "reveal").at(-1);
+  note(
+    revealMsg.impact?.kind === "gain",
+    `вскрытие подсвечено зелёным (${revealMsg.impact?.label})`,
+  );
+  const snapshot = engine.serializeFor(r, r.players[0]);
+  const baggage = snapshot.players[0].traitSlots.find((slot) => slot.cat === "baggage");
+  note(baggage.impact?.kind === "gain", "стол раскрытий: у карты зелёный эффект");
 }
 
 // ---------- 6. расход пишется в чат с модификаторами ----------

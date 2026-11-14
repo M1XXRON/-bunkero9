@@ -402,12 +402,35 @@ button {
   font-weight: 700;
 }
 
-.res.low {
-  border-color: rgba(255, 53, 0, 0.4);
+.res.warn,
+.res.crit {
+  border-color: rgba(255, 53, 0, 0.42);
+  animation: res-blink 1.7s ease-in-out infinite;
 }
 
-.res.low b {
+.res.warn b,
+.res.crit b,
+.res.warn i,
+.res.crit i {
   color: var(--accent);
+}
+
+.res.crit {
+  border-color: var(--accent);
+  background: #1b1210;
+  animation-duration: 0.9s;
+}
+
+@keyframes res-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 53, 0, 0);
+    border-color: rgba(255, 53, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 53, 0, 0.34);
+    border-color: var(--accent);
+  }
 }
 
 .top-actions {
@@ -2365,6 +2388,39 @@ body.landing {
   background: linear-gradient(90deg, rgba(255, 53, 0, 0.07), rgba(255, 53, 0, 0) 65%);
 }
 
+.chat-reveal.gain {
+  border-left-color: var(--ok);
+  background: linear-gradient(90deg, rgba(76, 175, 80, 0.14), transparent 68%);
+}
+
+.chat-reveal.drain {
+  border-left-color: var(--bad);
+  background: linear-gradient(90deg, rgba(255, 90, 60, 0.14), transparent 68%);
+}
+
+.cr-impact {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.cr-impact.gain {
+  color: #93e69d;
+  background: rgba(76, 175, 80, 0.16);
+}
+
+.cr-impact.drain {
+  color: #ff9a87;
+  background: rgba(255, 90, 60, 0.16);
+}
+
 .cr-avatar {
   grid-area: ava;
   display: grid;
@@ -2393,6 +2449,7 @@ body.landing {
 .cr-line {
   grid-area: line;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
@@ -2696,6 +2753,39 @@ body.landing {
   color: var(--accent);
   opacity: 0.8;
   white-space: nowrap;
+}
+
+.rb-chip.gain,
+.rb-chip.drain {
+  flex-wrap: wrap;
+}
+
+.rb-chip.gain {
+  background: rgba(76, 175, 80, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.28);
+}
+
+.rb-chip.drain {
+  background: rgba(255, 90, 60, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 90, 60, 0.28);
+}
+
+.rb-impact {
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 7.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rb-impact.gain {
+  color: #93e69d;
+}
+
+.rb-impact.drain {
+  color: #ff9a87;
 }
 
 .rb-empty {

@@ -65,6 +65,38 @@ function playerEffectText(trait) {
   return effect ? effect.label || '' : '';
 }
 
+// Влияние вскрытой карты на ресурсы: припасы — сразу, ранги/болезни — на
+// суточный расход. Нужно только для подсветки: зелёный — помогает, красный —
+// тянет запасы вниз.
+function traitImpact(trait) {
+  const effect = effectOf(trait?.value);
+  if (!effect) return null;
+  const supply = [];
+  for (const [key, amount] of Object.entries(effect.supply || {})) {
+    if (amount) supply.push(`${RESOURCE_LABEL[key]} +${amount}`);
+  }
+  if (supply.length) return { kind: 'gain', label: supply.join(' · ') };
+
+  const drains = [];
+  const saves = [];
+  if (effect.crewEat) {
+    const value = effect.crewEat;
+    (value > 0 ? drains : saves).push(`${value > 0 ? '+' : '−'}${Math.abs(value)} еды/чел.`);
+  }
+  if (effect.eat) {
+    (effect.eat > 0 ? drains : saves).push(
+      `${effect.eat > 0 ? '+' : '−'}${Math.abs(effect.eat)} еды/день`,
+    );
+  }
+  if (effect.crewPower) {
+    const value = effect.crewPower;
+    (value > 0 ? drains : saves).push(`${value > 0 ? '+' : '−'}${Math.abs(value)} энергии/день`);
+  }
+  if (drains.length) return { kind: 'drain', label: drains.join(' · ') };
+  if (saves.length) return { kind: 'gain', label: saves.join(' · ') };
+  return null;
+}
+
 const ABILITY_PHASES = ['intro', 'reveal', 'discussion', 'vote'];
 
 // Суточный расход с учётом живых носителей: повар кормит смену дешевле,
@@ -324,6 +356,7 @@ function revealMessage(room, player, trait) {
     kind: 'reveal',
     tone: 'reveal',
     text: `${player.name} раскрывает — ${trait.label}: ${trait.value}.`,
+    impact: traitImpact(trait),
     authorId: player.id,
     author: player.name,
     avatar: player.avatar,
@@ -1573,6 +1606,7 @@ function serializeFor(room, viewer) {
           revealed: isRevealed,
           value: isRevealed && trait ? trait.value : null,
           effect: isRevealed && trait ? playerEffectText(trait) : null,
+          impact: isRevealed && trait ? traitImpact(trait) : null,
         };
       }),
       traitsRevealed: revealedTraits.length,

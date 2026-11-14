@@ -23,6 +23,7 @@ export type Player = {
     revealed: boolean;
     value: string | null;
     effect?: string | null;
+    impact?: { kind: string; label: string } | null;
   }[];
   traitsRevealed: number;
   spokeToday: boolean;
@@ -182,7 +183,11 @@ function topbar(snap: Snapshot, origin: string): string {
          data-text="$left + 'с'"></span>`
     : "";
   const res = snap.resources;
-  const low = (value: number, limit: number) => (value <= limit ? " low" : "");
+  // Порог: критично — запас на день, тревожно — на два. Мигает красным уже
+  // на «подходит к концу», а не только когда ноль.
+  const energyDay = Math.max(2, Math.ceil(snap.aliveCount / 3));
+  const resState = (value: number, crit: number, warn: number) =>
+    value <= crit ? " crit" : value <= warn ? " warn" : "";
   return `
   <header class="topbar" id="topbar">
     <div class="topbar-left">
@@ -209,9 +214,9 @@ function topbar(snap: Snapshot, origin: string): string {
         snap.state === "lobby"
           ? ""
           : `<div class="resources">
-        <span class="res${low(res.food, snap.aliveCount)}" title="еда"><i>еда</i><b>${res.food}</b></span>
-        <span class="res${low(res.energy, 2)}" title="энергия"><i>энергия</i><b>${res.energy}</b></span>
-        <span class="res${low(res.meds, 0)}" title="медикаменты"><i>меды</i><b>${res.meds}</b></span>
+        <span class="res${resState(res.food, snap.aliveCount, snap.aliveCount * 2)}" title="еда"><i>еда</i><b>${res.food}</b></span>
+        <span class="res${resState(res.energy, energyDay, energyDay * 2)}" title="энергия"><i>энергия</i><b>${res.energy}</b></span>
+        <span class="res${resState(res.meds, 0, 1)}" title="медикаменты"><i>меды</i><b>${res.meds}</b></span>
       </div>`
       }
       <div class="top-actions">
@@ -767,7 +772,11 @@ function revealBoard(snap: Snapshot): string {
         .filter((slot) => slot.revealed)
         .map(
           (slot) =>
-            `<span class="rb-chip"><i>${esc(slot.label)}</i>${esc(slot.value || "")}</span>`,
+            `<span class="rb-chip ${slot.impact?.kind || ""}"><i>${esc(slot.label)}</i>${esc(slot.value || "")}${
+              slot.impact
+                ? `<b class="rb-impact ${slot.impact.kind}">${esc(slot.impact.label)}</b>`
+                : ""
+            }</span>`,
         )
         .join("");
       return `<div class="rb-card" data-peek>
@@ -895,13 +904,22 @@ function feedHtml(snap: Snapshot, activeTab = "day"): string {
 
       // раскрытие карты — карточкой: кто, какая категория и что именно
       if (m.kind === "reveal") {
-        const card = m as unknown as { traitLabel?: string; traitValue?: string };
-        return `<div class="chat-reveal">
+        const card = m as unknown as {
+          traitLabel?: string;
+          traitValue?: string;
+          impact?: { kind: string; label: string } | null;
+        };
+        return `<div class="chat-reveal ${card.impact?.kind || ""}">
           <span class="cr-avatar">${esc(m.avatar || "•")}</span>
           <span class="cr-name">${esc(m.author)}<span> раскрывает</span></span>
           <span class="cr-line">
             <span class="cr-cat">${esc(card.traitLabel || "")}</span>
             <b class="cr-val">${esc(card.traitValue || "")}</b>
+            ${
+              card.impact
+                ? `<span class="cr-impact ${card.impact.kind}">${esc(card.impact.label)}</span>`
+                : ""
+            }
           </span>
         </div>`;
       }
