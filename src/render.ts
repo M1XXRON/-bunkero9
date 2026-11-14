@@ -205,7 +205,13 @@ function topbar(snap: Snapshot, origin: string): string {
       <span class="phase-chip tone-${tone}">${esc(PHASE_CHIP[snap.state] || "")}</span>
       ${
         snap.state !== "lobby" && snap.state !== "intro"
-          ? `<span class="phase-day">день ${snap.day}${snap.daysLeft !== null ? ` · до спасения ${snap.daysLeft}` : ""}</span>`
+          ? `<span class="phase-day">день ${snap.day}${
+              snap.daysLeft !== null
+                ? snap.daysLeft === 0
+                  ? " · спасение сегодня"
+                  : ` · до спасения ${snap.daysLeft}`
+                : ""
+            }</span>`
           : ""
       }
       ${timer}

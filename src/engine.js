@@ -890,7 +890,10 @@ function resolveCrisis(room) {
 
   if (starving || cold) {
     const reason = starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод';
-    if (room.resources.meds > 0) {
+    // На последнем переходе медикаменты уже не помогут сигналу уйти: не
+    // тратим их и не пишем «вытянули всех», если спасение всё равно не придёт.
+    const finalDay = room.day >= room.rescueDay;
+    if (room.resources.meds > 0 && !finalDay) {
       room.resources.meds -= 1;
       system(
         room,
@@ -914,7 +917,8 @@ function resolveLegacyNight(room) {
   const cold = room.resources.energy <= 0;
   if (starving || cold) {
     const reason = starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод';
-    if (room.resources.meds > 0) {
+    const finalDay = room.day >= room.rescueDay;
+    if (room.resources.meds > 0 && !finalDay) {
       room.resources.meds -= 1;
       system(room, `Ночь на пределе (${reason}), но медикаменты вытянули всех.`, 'warn');
     } else if (alive.length) {
@@ -1158,7 +1162,13 @@ function leaveRoom(code, playerId) {
       finishGame(room, winner);
       return { ok: true, deleted: false };
     }
-    if (room.state === 'reveal') {
+    if (room.state === 'intro') {
+      // Ушёл последний, кого ждали на сценарии — начинаем день.
+      const remaining = room.players.filter((item) => !item.left);
+      const ready = remaining.filter((item) => (room.readyIds || []).includes(item.id)).length;
+      if (remaining.length && ready >= remaining.length) beginDay(room);
+      else changed(room);
+    } else if (room.state === 'reveal') {
       player.revealedThisRound = true;
       if (room.turn && turnPlayer(room)?.id === player.id) advanceTurn(room);
       else checkRevealComplete(room);

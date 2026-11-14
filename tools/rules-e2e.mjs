@@ -135,9 +135,10 @@ const hostIdOf = (room) => room.hostId;
   room.state = "vote";
   room.resources.food = 0;
   room.resources.energy = 5;
-  room.resources.meds = 0;
+  room.resources.meds = 1;
   engine.skipPhase(room.code, host.id);
   note(room.winner === "none", `нулевая еда — спасения нет (${room.winner})`);
+  note(room.resources.meds === 1, "на последнем дне медикаменты не тратятся впустую");
   note(
     room.messages.some((m) => m.text.includes("Спасение не пришло")),
     "в ленте объяснение, почему сигнал не ушёл",
@@ -152,6 +153,14 @@ const hostIdOf = (room) => room.hostId;
   room.resources.energy = 5;
   engine.skipPhase(room.code, host.id);
   note(room.winner === "survived", `с запасами — спасение (${room.winner})`);
+}
+
+// ---------- 5a. «Я прочитал»: когда прочитали все — день начинается ----------
+{
+  const { room, host, guests } = makeRoom(5);
+  engine.startGame(room, host.id);
+  for (const p of [host, ...guests]) engine.markReady(room.code, p.id);
+  note(room.state === "reveal", `все прочитали — день начался (${room.state})`);
 }
 
 // ---------- 5c. очередь раскрытия сдвигается по дням ----------

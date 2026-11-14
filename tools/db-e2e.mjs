@@ -72,6 +72,7 @@ ok(after.db && after.db.rooms >= 1, `в базе ${after.db?.rooms} комнат
 
 const htmlAfter = await page(H);
 const codeAfter =
+  (htmlAfter.match(/class="room-code"[^>]*>\s*([A-Z0-9]{4})/) || [])[1] ??
   (htmlAfter.match(/room-code-chip[^>]*>\s*([A-Z0-9]{4})/) || [])[1] ??
   (htmlAfter.match(/Код бункера <b>([A-Z0-9]{4})<\/b>/) || [])[1];
 const phaseAfter = (htmlAfter.match(/phase-chip[^>]*>([^<]+)</) || [])[1]?.trim();
