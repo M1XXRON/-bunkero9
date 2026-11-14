@@ -49,6 +49,9 @@ let ws;
 let seq = 0;
 const pending = new Map();
 const errors = [];
+const check = (condition, message) => {
+  if (!condition) errors.push(message);
+};
 const send = (method, params = {}) =>
   new Promise((resolve, reject) => {
     const id = ++seq;
@@ -70,6 +73,30 @@ const evaluate = async (expression) => {
 };
 const click = (selector) =>
   evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
+const trustedClick = async (selector) => {
+  const point = await evaluate(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  })()`);
+  if (!point) throw new Error(`Не найден элемент для нажатия: ${selector}`);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+  await send("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x: point.x,
+    y: point.y,
+    button: "left",
+    clickCount: 1,
+  });
+  await send("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x: point.x,
+    y: point.y,
+    button: "left",
+    clickCount: 1,
+  });
+};
 const phase = () => evaluate(`document.getElementById("board")?.dataset.phase || ""`);
 const viewport = async (width, height) => {
   await send("Emulation.setDeviceMetricsOverride", {
@@ -189,19 +216,60 @@ try {
         (await evaluate(`document.querySelectorAll('.lobby-player:not(.empty)').length`)) === 5,
     );
     await shot("02-lobby.png");
+    check(
+      (await evaluate(`document.querySelectorAll(".launch-checklist li").length`)) === 3,
+      "Лобби: нет чек-листа запуска",
+    );
+    check(
+      (await evaluate(`document.querySelectorAll(".seat-cell.occupied").length`)) === 5,
+      "Лобби: карта мест не совпадает с составом",
+    );
     await viewport(390, 844);
     await shot("09-mobile-lobby.png");
 
     await viewport(1440, 960);
+    await trustedClick(".room-pill");
+    await sleep(300);
+    check(
+      await evaluate(
+        `document.getElementById("uiToast")?.textContent?.includes("Приглашение скопировано")`,
+      ),
+      "Приглашение: уведомление о копировании не показано",
+    );
+    await evaluate(`document.getElementById("uiToast").hidden = true`);
     await click("#board .lobby-start .btn-primary");
     await waitFor(async () => (await phase()) === "intro");
     await shot("03-scenario.png");
+    check(
+      await evaluate(`document.querySelector(".intro-meter[role=progressbar]") !== null`),
+      "Сценарий: прогресс готовности недоступен",
+    );
     await viewport(390, 844);
     await shot("10-mobile-scenario.png");
 
     await viewport(1440, 960);
     await gotoPhase("reveal");
     await shot("04-reveal.png");
+    check(
+      await evaluate(
+        `document.querySelector(".phase-steps li[aria-current=step]")?.textContent?.includes("Раскрытие")`,
+      ),
+      "Маршрут фазы: неверный текущий этап",
+    );
+    check(
+      await evaluate(`document.querySelectorAll(".turn-callout").length === 1`),
+      "Раскрытие: не показан текущий ход",
+    );
+    await click(".motion-toggle");
+    check(
+      (await evaluate(`document.documentElement.dataset.motion`)) === "off",
+      "Анимация: кнопка остановки не работает",
+    );
+    await click(".motion-toggle");
+    check(
+      (await evaluate(`document.documentElement.dataset.motion`)) === "on",
+      "Анимация: повторное включение не работает",
+    );
     await viewport(390, 844);
     await evaluate(`document.querySelector('.game-grid')?.scrollTo({top: 0})`);
     await shot("11-mobile-reveal.png");
@@ -209,6 +277,23 @@ try {
     await viewport(1440, 960);
     await gotoPhase("discussion");
     await shot("05-discussion.png");
+    await evaluate(
+      `(() => { const i = document.getElementById("boardFilter"); i.value = "Вера"; i.dispatchEvent(new Event("input", {bubbles: true})); })()`,
+    );
+    await sleep(250);
+    check(
+      (await evaluate(
+        `[...document.querySelectorAll(".rb-card")].filter((card) => !card.hidden).length`,
+      )) === 1,
+      "Поиск по столу: фильтр не сузил карточки",
+    );
+    await evaluate(
+      `(() => { const i = document.getElementById("boardFilter"); i.value = ""; i.dispatchEvent(new Event("input", {bubbles: true})); })()`,
+    );
+    check(
+      await evaluate(`document.querySelectorAll(".survival-stat").length === 3`),
+      "Обсуждение: неполный прогноз ресурсов",
+    );
     await click(".ability-info");
     await waitFor(async () =>
       Boolean(await evaluate(`document.querySelector('#abilityHelp')?.open`)),
@@ -217,11 +302,39 @@ try {
     await click("#abilityHelp .modal-close");
 
     await gotoPhase("vote");
+    await click("button.target-card:not(.self)");
+    await waitFor(async () =>
+      Boolean(await evaluate(`document.querySelector(".target-card[aria-pressed=true]")`)),
+    );
     await shot("07-vote.png");
+    check(
+      await evaluate(`document.querySelector(".vote-brief.is-cast") !== null`),
+      "Голосование: статус голоса не обновился",
+    );
     await viewport(390, 844);
     await click('.mtab[data-mtab-btn="chat"]');
     await waitFor(async () => (await evaluate(`document.documentElement.dataset.mtab`)) === "chat");
     await shot("12-mobile-chat.png");
+
+    await evaluate(`document.querySelector('.mtab[data-mtab-btn="play"]')?.click()`);
+    await viewport(1440, 960);
+    await gotoPhase("end");
+    await shot("13-ending.png");
+    check(
+      (await evaluate(`document.querySelectorAll(".ending-stats > div").length`)) === 4,
+      "Финал: итоговая статистика не собрана",
+    );
+    check(
+      (await evaluate(`document.querySelectorAll(".end-roster li").length`)) === 5,
+      "Финал: судьба смены неполная",
+    );
+    await viewport(390, 844);
+    await shot("14-mobile-ending.png");
+
+    await viewport(320, 720);
+    const smallOverflow = await evaluate("document.documentElement.scrollWidth - innerWidth");
+    if (smallOverflow > 1) errors.push(`Горизонтальный скролл на 320px: ${smallOverflow}px`);
+    await viewport(390, 844);
 
     const overflow = await evaluate("document.documentElement.scrollWidth - innerWidth");
     if (overflow > 1) errors.push(`Горизонтальный скролл на мобильном: ${overflow}px`);

@@ -196,7 +196,7 @@ function topbar(snap: Snapshot, origin: string): string {
     <div class="topbar-left">
       <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
       <button class="pill room-pill" title="Скопировать код, ссылку и приглашение"
-        data-on:click="navigator.clipboard?.writeText(${esc(JSON.stringify(inviteText(snap, origin)))})">
+        data-on:click="window.bunkerCopyInvite(${esc(JSON.stringify(inviteText(snap, origin)))})">
         <span class="room-code">${esc(snap.code)}</span><span class="room-copy">копировать</span>
       </button>
     </div>
@@ -230,6 +230,7 @@ function topbar(snap: Snapshot, origin: string): string {
       }
       <div class="top-actions">
         <button class="pill pill-ghost" data-on:click="document.getElementById('rules').showModal()">Правила</button>
+        <button class="pill pill-icon motion-toggle" type="button" data-motion-toggle aria-label="Выключить анимацию" title="Выключить анимацию"><span class="motion-pause" aria-hidden="true">Ⅱ</span><span class="motion-play" aria-hidden="true">▶</span></button>
         ${leaveButton(snap)}
       </div>
     </div>
@@ -288,17 +289,33 @@ function lobby(snap: Snapshot, origin: string): string {
     : snap.players.length < snap.minPlayers
       ? `НУЖНО ЕЩЁ ${snap.minPlayers - snap.players.length}`
       : "ОТКРЫТЬ БУНКЕР";
+  const seatsNeeded = Math.max(0, snap.minPlayers - snap.players.length);
+  const readiness = Math.min(100, Math.round((snap.players.length / snap.minPlayers) * 100));
+  const readyForLaunch = seatsNeeded === 0;
+  const seatMap = Array.from({ length: snap.maxPlayers }, (_, index) => {
+    const occupied = index < snap.players.length;
+    return `<i class="seat-cell ${occupied ? "occupied" : ""} ${index < snap.minPlayers ? "required" : ""}" aria-hidden="true"><span>${String(index + 1).padStart(2, "0")}</span></i>`;
+  }).join("");
 
   return `
   <div class="lobby-body">
     <section class="panel invite-card">
-      <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
-      <h1>Код бункера <b>${esc(snap.code)}</b></h1>
-      <p class="invite-text">Отправьте друзьям код и адрес: <b>${esc(origin)}</b></p>
-      <div class="meta-row">
-        <span class="status ok"><i></i>${snap.players.filter((p) => p.connected).length} на связи</span>
-        <span class="chip">${snap.players.length} / ${snap.maxPlayers} мест</span>
-        <span class="chip chip-warn">спасение через ${snap.rescueDay ?? "?"} дн.</span>
+      <div class="invite-layout">
+        <div class="invite-copy">
+          <span class="eyebrow">ПРИГЛАСИТЕ ВЫЖИВШИХ</span>
+          <h1>Код бункера <b>${esc(snap.code)}</b></h1>
+          <p class="invite-text">Отправьте друзьям код и адрес: <b>${esc(origin)}</b></p>
+          <div class="meta-row">
+            <span class="status ok"><i></i>${snap.players.filter((p) => p.connected).length} на связи</span>
+            <span class="chip">${snap.players.length} / ${snap.maxPlayers} мест</span>
+            <span class="chip chip-warn">спасение через ${snap.rescueDay ?? "?"} дн.</span>
+          </div>
+        </div>
+        <ol class="launch-checklist" role="list" aria-label="Подготовка к запуску">
+          <li class="done"><span>01</span><div><b>Приглашение готово</b><small>Код и ссылка копируются в шапке</small></div><i>✓</i></li>
+          <li class="${readyForLaunch ? "done" : "current"}"><span>02</span><div><b>Соберите смену</b><small>Минимум ${snap.minPlayers} · сейчас ${snap.players.length}</small></div><i>${readyForLaunch ? "✓" : seatsNeeded}</i></li>
+          <li class="${readyForLaunch ? "current" : ""}"><span>03</span><div><b>${snap.me.isHost ? "Откройте бункер" : "Ожидайте хоста"}</b><small>${readyForLaunch ? "Состав готов к запуску" : "Кнопка станет доступна позже"}</small></div><i>→</i></li>
+        </ol>
       </div>
     </section>
 
@@ -310,15 +327,23 @@ function lobby(snap: Snapshot, origin: string): string {
         </div>
         <span class="seat-count">${snap.players.length} / ${snap.maxPlayers}</span>
       </header>
+      <div class="seat-map-wrap">
+        <div class="seat-map-label"><span>КАРТА СМЕНЫ</span><span>первые ${snap.minPlayers} мест — минимум</span></div>
+        <div class="seat-map" aria-label="Занято ${snap.players.length} из ${snap.maxPlayers} мест">${seatMap}</div>
+      </div>
       <div class="lobby-players">${seats}${empty}</div>
       <div class="lobby-start">
-        <div class="pace-switch">
+        <div class="launch-state ${readyForLaunch ? "ready" : ""}">
+          <div class="launch-state-copy"><span class="status ${readyForLaunch ? "ok" : ""}"><i></i>${readyForLaunch ? "Смена готова" : `До запуска: ещё ${seatsNeeded}`}</span><span>${snap.me.isHost ? "Настройте темп и начинайте" : "Хост управляет запуском"}</span></div>
+          <div class="launch-meter" role="progressbar" aria-label="Готовность минимального состава" aria-valuemin="0" aria-valuemax="${snap.minPlayers}" aria-valuenow="${Math.min(snap.minPlayers, snap.players.length)}"><i style="width: ${readiness}%"></i></div>
+        </div>
+        <div class="pace-switch" aria-label="Темп игры">
           <button class="chip ${snap.settings.pace === "normal" ? "on" : ""}" data-on:click="@post('/act/pace', {payload: {pace: 'normal'}, retry: 'never'})">обычный</button>
           <button class="chip ${snap.settings.pace === "fast" ? "on" : ""}" data-on:click="@post('/act/pace', {payload: {pace: 'fast'}, retry: 'never'})">быстрый</button>
         </div>
         ${botControls(snap)}
         <button class="btn btn-primary btn-wide" ${canStart ? "" : "disabled"}
-          data-on:click="@post('/act/start', {retry: 'never'})">${startLabel}</button>
+          data-on:click="@post('/act/start', {retry: 'never'})"><span>${startLabel}</span><span class="btn-arrow" aria-hidden="true">↗</span></button>
       </div>
     </section>
   </div>`;
@@ -408,7 +433,7 @@ function playersPanel(snap: Snapshot): string {
           <span class="pname">${esc(p.name)}</span>
           ${p.isBot ? '<span class="mini-badge bot">бот</span>' : ""}
           ${status}${votes}
-          <span class="pdots">${"●".repeat(p.traitsRevealed)}${"○".repeat(Math.max(0, p.totalTraits - p.traitsRevealed))}</span>
+          <span class="pdots" aria-label="Раскрыто ${p.traitsRevealed} из ${p.totalTraits} карт">${"●".repeat(p.traitsRevealed)}${"○".repeat(Math.max(0, p.totalTraits - p.traitsRevealed))}</span>
         </div>`;
     })
     .join("");
@@ -422,7 +447,37 @@ function playersPanel(snap: Snapshot): string {
         <span class="seat-count">${snap.aliveCount} / ${snap.players.length}</span>
       </header>
       <div class="players-list">${rows}</div>
+      <footer class="crew-status ${snap.aliveCount <= snap.crewMin ? "critical" : ""}">
+        <span><i></i>${snap.aliveCount <= snap.crewMin ? "Смена на пределе" : "Системы обслуживаются"}</span>
+        <span>минимум ${snap.crewMin}</span>
+      </footer>
     </section>`;
+}
+
+// Маршрут дня: одинаковый ориентир во всех игровых фазах. Это не навигация —
+// этапы по-прежнему переключает движок, поэтому элементы не выглядят ссылками.
+function phasePath(snap: Snapshot): string {
+  if (!["reveal", "discussion", "vote"].includes(snap.state)) return "";
+  const active = snap.state === "reveal" ? 0 : snap.state === "discussion" ? 1 : 2;
+  const steps = ["Раскрытие", "Обсуждение", "Голосование"];
+  const items = steps
+    .map((label, index) => {
+      const state = index < active ? "done" : index === active ? "active" : "upcoming";
+      return `<li class="${state}" ${index === active ? 'aria-current="step"' : ""}>
+        <span class="phase-index">${index < active ? "✓" : `0${index + 1}`}</span>
+        <span class="phase-name">${label}</span>
+      </li>`;
+    })
+    .join("");
+  const total = Math.max(1, snap.rescueDay || snap.day || 1);
+  const ratio = Math.min(1, Math.max(0, snap.day / total));
+  return `<div class="phase-path">
+    <ol class="phase-steps" role="list" aria-label="Этапы дня ${snap.day}">${items}</ol>
+    <div class="phase-rescue">
+      <div class="phase-rescue-copy"><span>${snap.daysLeft === 0 ? "СИГНАЛ СЕГОДНЯ" : "ДЕНЬ " + snap.day + " / " + total}</span><b>${snap.daysLeft === null ? "—" : snap.daysLeft === 0 ? "ФИНАЛ" : "−" + snap.daysLeft + " ДН."}</b></div>
+      <div class="phase-day-meter" role="progressbar" aria-label="Путь до спасения" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${Math.min(total, snap.day)}"><i style="width: ${Math.round(ratio * 100)}%"></i></div>
+    </div>
+  </div>`;
 }
 
 // «Ваши карты» — всегда на экране: игрок в любой момент видит свои
@@ -459,6 +514,7 @@ function ownCards(snap: Snapshot): string {
       <div><span class="eyebrow">ЛИЧНОЕ ДЕЛО</span><h2>Ваши карты</h2></div>
       <span class="seat-count">${snap.me.traits.filter((t) => t.revealed).length} / ${snap.me.traits.length}</span>
     </header>
+    <div class="own-progress" role="progressbar" aria-label="Ваши раскрытые карты" aria-valuemin="0" aria-valuemax="${snap.me.traits.length}" aria-valuenow="${snap.me.traits.filter((t) => t.revealed).length}"><i style="width: ${Math.round((snap.me.traits.filter((t) => t.revealed).length / Math.max(1, snap.me.traits.length)) * 100)}%"></i></div>
     <div class="own-list">${rows}</div>
   </section>`;
 }
@@ -484,6 +540,7 @@ function turnStrip(snap: Snapshot): string {
       <span class="eyebrow">ОЧЕРЕДЬ РАСКРЫТИЯ</span>
       <span class="seat-count">${turn.index} / ${turn.total}</span>
     </div>
+    <div class="turn-progress" role="progressbar" aria-label="Позиция в очереди раскрытия" aria-valuemin="0" aria-valuemax="${turn.total}" aria-valuenow="${turn.index}"><i style="width: ${Math.round((turn.index / Math.max(1, turn.total)) * 100)}%"></i></div>
     <div class="turn-chips">${chips}</div>
   </div>`;
 }
@@ -541,10 +598,11 @@ function introHero(snap: Snapshot): string {
         </div>
       </div>
       <div class="intro-read">
-        <div class="intro-meter"><i style="width: ${pct}%"></i></div>
-        <span class="intro-read-count">${ready.count} / ${ready.total} прочитали</span>
+        <div class="intro-read-head"><span class="eyebrow">ОЗНАКОМЛЕНИЕ СМЕНЫ</span><span class="intro-read-count">${ready.count} / ${ready.total} прочитали</span></div>
+        <div class="intro-meter" role="progressbar" aria-label="Игроки, прочитавшие сценарий" aria-valuemin="0" aria-valuemax="${ready.total}" aria-valuenow="${ready.count}"><i style="width: ${pct}%"></i></div>
+        <span class="intro-read-note">${ready.me ? "Вы готовы. Можно сверить запасы ещё раз." : "Прочитайте сценарий и подтвердите готовность."}</span>
       </div>
-      <div class="intro-actions">${readyButton}${hostButton}</div>
+      <div class="intro-actions">${readyButton}${hostButton}<span class="intro-ready-note"><i></i>${ready.count}/${ready.total} на связи</span></div>
     </div>
   </div>`;
 }
@@ -620,6 +678,22 @@ function eventCard(snap: Snapshot): string {
     </div>`;
 }
 
+function turnCallout(snap: Snapshot): string {
+  const turn = snap.turn;
+  if (!turn) return "";
+  const mine = snap.me.isMyTurn;
+  const player = snap.players.find((p) => p.id === turn.playerId);
+  const round = turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : "";
+  return `<div class="turn-callout ${mine ? "mine" : ""}">
+    ${player ? avatar(player, "sm") : ""}
+    <div class="turn-callout-copy">
+      <span class="eyebrow turn-eyebrow">${mine ? "ВАШ ХОД" : "ЭФИР"} · ${turn.index} / ${turn.total}${round}</span>
+      <strong>${turn.stage === "confirm" ? "Подтверждение хода" : mine ? "Ваша очередь раскрытия" : `На связи: ${esc(turn.name || "выживший")}`}</strong>
+    </div>
+    <span class="turn-live"><i></i>${mine ? "ДЕЙСТВУЙТЕ" : "СМОТРИМ"}</span>
+  </div>`;
+}
+
 function revealScene(snap: Snapshot): string {
   const me = snap.me;
   const turn = snap.turn;
@@ -634,9 +708,12 @@ function revealScene(snap: Snapshot): string {
     const last = me.traits.find((t) => t.revealed);
     if (turn.stage === "confirm" || !me.canReveal) {
       return `<div class="action-block">
-        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}</span>
+        ${turnCallout(snap)}
         <h3>Карта на столе</h3>
-        <p>${last ? `Все видят: <b>${esc(last.label)} — ${esc(last.value)}</b>.` : "Раскрывать больше нечего."}</p>
+        <div class="revealed-ticket">
+          <span class="revealed-ticket-check" aria-hidden="true">✓</span>
+          <div><span>ТЕПЕРЬ ВИДЯТ ВСЕ</span><b>${last ? esc(last.label) : "Карты закончились"}</b><p>${last ? esc(last.value) : "Можно передавать ход."}</p></div>
+        </div>
         <p class="note">Подтвердите конец хода — очередь перейдёт к следующему выжившему.</p>
         <button class="btn btn-primary end-turn-btn" data-on:click="@post('/act/end-turn', {retry: 'never'})">Завершить ход →</button>
         ${turnStrip(snap)}
@@ -646,6 +723,7 @@ function revealScene(snap: Snapshot): string {
       .map(
         (t, i) => `
       <button class="trait-card ${t.revealed ? "revealed" : ""}" ${t.revealed ? "disabled" : ""}
+        aria-label="${esc(t.label)}: ${esc(t.value)}. ${t.revealed ? "Уже раскрыто" : "Раскрыть карту"}"
         data-on:click="@post('/act/reveal', {payload: {index: ${i}}, retry: 'never'})">
         <span class="trait-label">${esc(t.label)}</span>
         <span class="trait-value">${esc(t.value)}</span>
@@ -655,7 +733,7 @@ function revealScene(snap: Snapshot): string {
       )
       .join("");
     return `<div class="action-block">
-        <span class="eyebrow turn-eyebrow">ВАШ ХОД · ${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}</span>
+        ${turnCallout(snap)}
         <h3>${turn.pass === 2 ? "Второй круг: покажите ещё одну карту" : "Покажите одну карту"}</h3>
         <p>Один факт станет публичным навсегда. Выбирайте осторожно — потом подтвердите конец хода.</p>
         <div class="trait-grid">${cards}</div>
@@ -666,7 +744,7 @@ function revealScene(snap: Snapshot): string {
   // чужой ход
   const who = turn?.name || "следующий";
   return `<div class="action-block">
-      <span class="eyebrow">РАСКРЫТИЕ · ${turn ? `${turn.index} / ${turn.total}${turn.passes > 1 ? ` · КРУГ ${turn.pass}/${turn.passes}` : ""}` : ""}</span>
+      ${turnCallout(snap)}
       <h3>Сейчас ход: ${esc(who)}</h3>
       <p>Выжившие открывают по одной карте по очереди. ${turn?.stage === "confirm" ? "Карта на столе — ждём подтверждения хода." : "Смотрите и запоминайте."}</p>
       <p class="note">${turn && turn.passes > 1 && turn.pass === 1 ? "Первый день: после круга будет второй — каждый раскроет ещё одну карту." : "Свои карты всегда видны слева — их можно перечитать в любой момент."}</p>
@@ -683,6 +761,13 @@ function voteScene(snap: Snapshot): string {
   const waiting = waiters.length
     ? `Ждут голоса: ${esc(waiters.length <= 3 ? waiters.join(", ") : `${waiters.slice(0, 3).join(", ")} и ещё ${waiters.length - 3}`)}`
     : "Все голоса собраны · хост может закрыть голосование";
+  const castCount = alive.length - waiters.length;
+  const choice =
+    me.votedFor === "skip"
+      ? "Вы воздержались"
+      : me.votedFor
+        ? `Ваш выбор: ${esc(alive.find((p) => p.id === me.votedFor)?.name || "выживший")}`
+        : "Решение ещё не принято";
   const cards = alive
     .map((p) => {
       // за себя голосовать нельзя — показываем карточку, но не кнопкой
@@ -694,6 +779,7 @@ function voteScene(snap: Snapshot): string {
         </div>`;
       return `
       <button class="target-card ${me.votedFor === p.id ? "selected" : ""}"
+        aria-pressed="${me.votedFor === p.id}"
         data-on:click="@post('/act/vote', {payload: {target: '${p.id}'}, retry: 'never'})">
         ${avatar(p, "xs")}
         <span class="target-name">${esc(p.name)}</span>
@@ -712,13 +798,19 @@ function voteScene(snap: Snapshot): string {
     })
     .join("");
   return `<div class="action-block">
+      <div class="vote-brief ${me.votedFor ? "is-cast" : ""}">
+        <span class="vote-brief-mark" aria-hidden="true">${me.votedFor ? "✓" : ""}</span>
+        <div class="vote-brief-copy"><span class="eyebrow">${me.votedFor ? "ГОЛОС УЧТЁН" : "РЕШЕНИЕ СМЕНЫ"}</span><strong>${choice}</strong><small>${me.votedFor ? "До закрытия голосования выбор можно изменить." : "Выберите человека или воздержитесь."}</small></div>
+        <div class="vote-count"><b>${castCount}<span>/</span>${alive.length}</b><small>голосов</small></div>
+      </div>
       <h3>Кого изгнать?</h3>
       <p>Изгнанный покидает бункер навсегда, и все его карты становятся видны. При равенстве голосов не уходит никто.</p>
       <div class="target-grid">${cards}</div>
       <div class="vote-tools">
         <button class="chip skip-vote ${me.votedFor === "skip" ? "selected" : ""}"
+          aria-pressed="${me.votedFor === "skip"}"
           data-on:click="@post('/act/vote', {payload: {target: 'skip'}, retry: 'never'})">Воздержаться</button>
-        <span class="note">${esc(waiting)}</span>
+        <span class="note vote-waiting"><i></i>${esc(waiting)}</span>
       </div>
       ${tally(snap)}
     </div>`;
@@ -741,25 +833,48 @@ function tally(snap: Snapshot): string {
 function endScene(snap: Snapshot): string {
   const ending = snap.ending;
   const survived = snap.winner === "survived";
-  const tag = survived ? "СПАСЕНИЕ" : "БУНКЕР ПОГИБ";
+  const tag = survived ? "СВЯЗЬ ВОССТАНОВЛЕНА · СПАСЕНИЕ" : "СИГНАЛА НЕТ · БУНКЕР ПОГИБ";
+  const alive = snap.players.filter((p) => p.alive).length;
   const roster = snap.players
     .map((p) => {
       const fate = p.alive ? (survived ? "спасся" : "погиб") : p.left ? "вышел" : "изгнан";
-      return `<li class="${p.alive && survived ? "survived" : ""}">${avatar(p, "xs")} <b>${esc(p.name)}</b> — ${esc(fate)}</li>`;
+      return `<li class="${p.alive && survived ? "survived" : ""}">${avatar(p, "xs")}<b>${esc(p.name)}</b><span class="end-fate">${esc(fate)}</span></li>`;
     })
     .join("");
-  return `<div class="action-block">
-      <span class="eyebrow">ПРОТОКОЛ ЗАВЕРШЁН${snap.story?.title ? ` · ${esc(snap.story.title)}` : ""}</span>
-      <h3>${esc(tag)}</h3>
-      <h4>${esc(ending?.title || "")}</h4>
-      <p>${esc(ending?.text || "")}</p>
-      <ul class="end-roster">${roster}</ul>
-      ${recapBlock(snap)}
-      ${
-        snap.me.isHost
-          ? `<button class="btn btn-primary" data-on:click="@post('/act/rematch', {retry: 'never'})">Сыграть ещё</button>`
-          : '<p class="note">Хост откроет новый бункер.</p>'
-      }
+  return `<div class="action-block ending-scene ${survived ? "is-victory" : "is-defeat"}">
+      <div class="ending-hero">
+        <div class="ending-beacon" aria-hidden="true">
+          <i></i><i></i><i></i>
+          <div class="ending-beacon-core">${survived ? "↗" : "×"}</div>
+          <span>${survived ? "09 / ONLINE" : "09 / OFFLINE"}</span>
+        </div>
+        <div class="ending-copy">
+          <span class="eyebrow">ПРОТОКОЛ ЗАВЕРШЁН${snap.story?.title ? ` · ${esc(snap.story.title)}` : ""}</span>
+          <span class="ending-kicker">${tag}</span>
+          <h3>${esc(ending?.title || tag)}</h3>
+          <p>${esc(ending?.text || "")}</p>
+        </div>
+      </div>
+      <div class="ending-stats" aria-label="Итоги смены">
+        <div><b>${alive}</b><span>${survived ? "спаслись" : "остались внутри"}</span></div>
+        <div><b>${snap.day}</b><span>дней в бункере</span></div>
+        <div><b>${snap.resources.food}</b><span>еды в остатке</span></div>
+        <div><b>${snap.resources.meds}</b><span>медикаментов</span></div>
+      </div>
+      <div class="ending-columns">
+        <section class="ending-roster" aria-labelledby="endingRosterTitle">
+          <div class="ending-section-head"><span class="eyebrow">ПОИМЁННЫЙ СПИСОК</span><h3 id="endingRosterTitle">Судьба смены</h3></div>
+          <ul class="end-roster">${roster}</ul>
+        </section>
+        <div class="ending-recap">${recapBlock(snap)}</div>
+      </div>
+      <div class="ending-actions">
+        ${
+          snap.me.isHost
+            ? `<button class="btn btn-primary" data-on:click="@post('/act/rematch', {retry: 'never'})"><span>Сыграть ещё</span><span class="btn-arrow" aria-hidden="true">↗</span></button><span class="note">Тот же состав · новые карты · новый сценарий</span>`
+            : '<p class="note">Хост откроет новый бункер. Можно обсудить итоги в чате.</p>'
+        }
+      </div>
     </div>`;
 }
 
@@ -811,10 +926,14 @@ function revealBoard(snap: Snapshot): string {
   const total = snap.players.filter((p) => p.alive).length;
   return `<div class="reveal-board">
     <div class="rb-title">
-      <span class="eyebrow">СТОЛ РАСКРЫТИЙ</span>
-      <span class="seat-count">${total} выживших</span>
+      <div><span class="eyebrow">СТОЛ РАСКРЫТИЙ</span><span class="seat-count">${total} выживших</span></div>
+      <div class="rb-tools">
+        <label class="board-search"><span class="sr-only">Найти игрока или раскрытую карту</span><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.4 12.4 4 4"/></svg><input id="boardFilter" type="search" placeholder="Игрок или карта…" autocomplete="off" data-preserve-attr="value"></label>
+        <output id="boardFilterStatus" class="board-filter-status" for="boardFilter" role="status" aria-live="polite">${total} карточек</output>
+      </div>
     </div>
     <div class="rb-grid">${rows}</div>
+    <p id="boardFilterEmpty" class="board-filter-empty" hidden>Ничего не найдено. Попробуйте имя или другую категорию.</p>
   </div>`;
 }
 
@@ -829,11 +948,36 @@ function hintList(snap: Snapshot): string {
   </div>`;
 }
 
+function survivalBrief(snap: Snapshot): string {
+  const foodDays = snap.resources.food / Math.max(1, snap.aliveCount);
+  const energyDay = Math.max(2, Math.ceil(snap.aliveCount / 3));
+  const energyDays = snap.resources.energy / energyDay;
+  const horizon = Math.max(1, snap.daysLeft ?? snap.rescueDay ?? 1);
+  const isStable = foodDays >= horizon && energyDays >= horizon && snap.aliveCount > snap.crewMin;
+  const format = (value: number) => value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+  const stat = (label: string, value: string, days: string, ratio: number, icon: string) => `
+    <div class="survival-stat">
+      <div class="survival-stat-head"><span>${icon}${label}</span><b>${value}</b></div>
+      <div class="survival-mini-meter" aria-hidden="true"><i style="width: ${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%"></i></div>
+      <small>${days}</small>
+    </div>`;
+  return `<section class="survival-brief ${isStable ? "stable" : "strained"}" aria-label="Прогноз запасов бункера">
+    <header class="survival-brief-head"><span class="eyebrow">ПРОГНОЗ БУНКЕРА</span><span class="survival-verdict"><i></i>${isStable ? "До сигнала хватает" : "Нужен план экономии"}</span></header>
+    <div class="survival-stats">
+      ${stat("ЕДА", format(snap.resources.food), `≈ ${format(foodDays)} дн. по базовой норме`, foodDays / horizon, "◆")}
+      ${stat("ЭНЕРГИЯ", format(snap.resources.energy), `≈ ${format(energyDays)} дн. работы систем`, energyDays / horizon, "ϟ")}
+      ${stat("СМЕНА", String(snap.aliveCount), `минимум экипажа: ${snap.crewMin}`, (snap.aliveCount - snap.crewMin) / Math.max(1, snap.totalCount - snap.crewMin), "●")}
+    </div>
+    <footer class="survival-brief-foot"><span>Расчёт по базовой норме — эффекты карт могут его изменить.</span><b>${snap.daysLeft === 0 ? "Сигнал сегодня" : `До сигнала: ${snap.daysLeft ?? "?"} дн.`}</b></footer>
+  </section>`;
+}
+
 // Обсуждение. Два вида: сводка (по умолчанию) и старый текстовый — переключатель
 // в шапке панели, выбор живёт в сигнале $simple до перезагрузки.
 function discussionScene(snap: Snapshot): string {
   return `<div class="action-block">
     <div data-show="!$simple" class="discuss-rich">
+      ${survivalBrief(snap)}
       ${revealBoard(snap)}
       ${hintList(snap)}
     </div>
@@ -887,10 +1031,11 @@ function scene(snap: Snapshot): string {
         ${headActions}
       </header>`;
   return `
-    <section class="panel scene-panel${snap.state === "intro" ? " intro-panel" : ""}">
+    <section class="panel scene-panel${snap.state === "intro" ? " intro-panel" : snap.state === "end" ? " end-panel" : ""}">
       ${head}
+      ${phasePath(snap)}
       ${abilityPanel(snap)}
-      ${eventCard(snap)}
+      ${snap.state === "end" ? "" : eventCard(snap)}
       ${body}
     </section>`;
 }
@@ -1039,6 +1184,8 @@ function rules(snap: Snapshot): string {
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
           <p><b>Кризис.</b> Отдельной ночи нет: сразу после голосования бункер проверяет запасы. Если еда или энергия на нуле, он теряет одного; медикаменты могут прикрыть один такой переход.</p>
           <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>
+          <p><b>Управление.</b> Клавиша <b>/</b> открывает чат и переводит фокус в поле сообщения. Клавиша <b>Esc</b> закрывает диалог. Кнопка <b>Ⅱ</b> в шапке останавливает декоративные анимации и запоминает выбор; системная настройка уменьшенного движения учитывается всегда.</p>
+          <p><b>Голос.</b> Можно изменить выбор, пока голосование не закрыто. В актуальном статусе видно, за кого вы проголосовали или что воздержались.</p>
         </div>`;
 }
 
@@ -1092,7 +1239,8 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
         <div class="modal-head"><span class="eyebrow">СПЕЦВОЗМОЖНОСТЬ</span><h2 id="abilityHelpTitle">Что она даёт</h2></div>
         <div class="modal-section"><p id="abilityHelpBody"></p></div>
       </dialog>
-      <div id="error"></div>
+      <div id="error" role="alert" aria-live="assertive" aria-atomic="true"></div>
+      <div id="uiToast" class="ui-toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div id="peek" class="peek" hidden></div>
     </section>
   </div>`;
@@ -1161,5 +1309,5 @@ export function renderTitle(snap: Snapshot): string {
 }
 
 export function renderError(text: string): string {
-  return `<div id="error" class="toast show">${esc(text)}</div>`;
+  return `<div id="error" role="alert" aria-live="assertive" aria-atomic="true" class="toast show">${esc(text)}</div>`;
 }

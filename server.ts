@@ -58,7 +58,8 @@ const STYLE_VER = (() => {
     const fs = require("node:fs");
     const base = fs.readFileSync(`${PUBLIC}/style.css`, "utf8");
     const redesign = fs.readFileSync(`${PUBLIC}/redesign.css`, "utf8");
-    return Bun.hash(base + redesign)
+    const stages = fs.readFileSync(`${PUBLIC}/stages.css`, "utf8");
+    return Bun.hash(base + redesign + stages)
       .toString(36)
       .slice(0, 8);
   } catch {
@@ -995,6 +996,8 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/stages.css?v=${STYLE_VER}">
+<script src="/experience.js" defer></script>
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <header class="landing-top">
@@ -1003,6 +1006,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
     <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
   </a>
   <div class="landing-top-right">
+    <button class="icon-btn motion-toggle" type="button" data-motion-toggle aria-label="Выключить анимацию" title="Выключить анимацию"><span class="motion-pause" aria-hidden="true">Ⅱ</span><span class="motion-play" aria-hidden="true">▶</span></button>
     <span class="landing-status"><i></i>КАНАЛ 09 ОТКРЫТ</span>
     <span class="landing-top-note">бесплатно · в браузере · без установки</span>
   </div>
@@ -1042,7 +1046,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
       <p class="form-lead">Придумайте позывной и позовите друзей.</p>
       ${problem ? `<p class="toast">${problem}</p>` : ""}
       <label class="field">Ваш позывной
-        <input name="name" maxlength="16" required placeholder="Например, Ворон" value="${name}">
+        <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Ворон" value="${name}">
       </label>
       <fieldset class="avatars" aria-label="Выберите аватар">${avatars}</fieldset>
       <button class="btn btn-primary btn-wide" type="submit"><span>Создать игру</span><span class="btn-arrow" aria-hidden="true">↗</span></button>
@@ -1055,10 +1059,10 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
       <h2>У вас есть код?</h2>
       <div class="join-fields">
         <label class="field">Код комнаты
-          <input name="code" maxlength="4" required placeholder="КОД" class="code-input" value="${code}">
+          <input name="code" maxlength="4" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="КОД" class="code-input" value="${code}">
         </label>
         <label class="field">Ваш позывной
-          <input name="name" maxlength="16" required placeholder="Например, Лиса" value="${name}">
+          <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Лиса" value="${name}">
         </label>
       </div>
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
@@ -1085,6 +1089,8 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/stages.css?v=${STYLE_VER}">
+<script src="/experience.js" defer></script>
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
@@ -1436,6 +1442,8 @@ Bun.serve({
     for (const name of [
       "/style.css",
       "/redesign.css",
+      "/stages.css",
+      "/experience.js",
       "/sound.js",
       "/favicon.svg",
       "/favicon-32.png",
