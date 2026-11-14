@@ -2885,3 +2885,548 @@ body.landing {
   color: var(--warn);
   opacity: 0.85;
 }
+
+/* ---------- мобильный режим: один экран, две вкладки, без длинного скролла ----------
+   Всё ниже действует только на узких экранах. Десктопная раскладка (три колонки,
+   постоянный чат справа) не меняется: правила живут в этом media-блоке. */
+
+.mtabbar {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  html,
+  body.game {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body.game {
+    overscroll-behavior: none;
+  }
+
+  .screen {
+    height: var(--app-h, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ----- компактный топбар в одну строку ----- */
+  .topbar {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding: 7px 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line-soft);
+    z-index: 30;
+  }
+
+  .topbar-left {
+    display: none;
+  }
+
+  .topbar-center {
+    order: 0;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    grid-column: auto;
+    justify-self: auto;
+  }
+
+  .topbar-center .phase-day {
+    display: none;
+  }
+
+  .phase-chip {
+    height: 28px;
+    padding: 0 9px;
+    font-size: 9.5px;
+    letter-spacing: 0.07em;
+  }
+
+  .phase-timer {
+    min-width: 30px;
+    font-size: 14px;
+  }
+
+  .topbar-right {
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+  }
+
+  /* Ресурсы остаются, но подписи сжаты до одной буквы: три полных слова
+     не помещаются рядом с фазой и кнопками. */
+  .topbar-right .resources {
+    display: flex;
+    gap: 4px;
+  }
+
+  .res {
+    height: 28px;
+    padding: 0 7px;
+    gap: 4px;
+  }
+
+  .res i {
+    font-size: 0;
+  }
+
+  .res i::before {
+    content: "Е";
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+
+  .res:nth-child(2) i::before {
+    content: "Э";
+  }
+
+  .res:nth-child(3) i::before {
+    content: "М";
+  }
+
+  .res b {
+    font-size: 12px;
+  }
+
+  .top-actions {
+    gap: 4px;
+  }
+
+  .top-actions .pill-ghost {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 0;
+    border-radius: 50%;
+  }
+
+  .top-actions .pill-ghost::before {
+    content: "?";
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .top-actions .pill-icon,
+  .top-actions .icon-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .phase-banner {
+    top: 52px;
+  }
+
+  /* ----- каркас: контент занимает всё, вкладки — снизу ----- */
+  #board {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .mtabbar {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    background: var(--bg-deep);
+    border-top: 1px solid var(--line);
+    z-index: 40;
+  }
+
+  .mtab {
+    position: relative;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--dim);
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mtab-ico {
+    display: flex;
+  }
+
+  .mtab[aria-pressed="true"] {
+    background: var(--card-2);
+    color: #fff;
+  }
+
+  html[data-mtab="play"] .mtab[data-mtab-btn="chat"].has-unread::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 22px);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Действие требуется, а открыт чат: красная точка на «Столе». */
+  html[data-mtab="chat"] #board[data-action="1"] ~ .mtabbar .mtab[data-mtab-btn="play"]::after,
+  html[data-mtab="chat"] #board[data-phase="end"] ~ .mtabbar .mtab[data-mtab-btn="play"]::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 22px);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ----- стол ----- */
+  .game-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 10px 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .game-grid > .panel,
+  .game-grid > .side-column {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .scene-panel {
+    order: 1;
+  }
+
+  .side-column {
+    order: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Сначала лента выживших, потом личные карты: контекст важнее досье. */
+  .side-column .players-panel {
+    order: -1;
+  }
+
+  .lobby-main > * {
+    flex: 0 0 auto;
+  }
+
+  .game .panel {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  /* В шапке сцены остаётся только хостовая кнопка пропуска: заголовок
+     дублирует чип фазы, а переключатель «простой вид» на телефоне не нужен. */
+  .scene-panel .panel-head {
+    min-height: 0;
+    margin-bottom: 8px;
+    padding: 2px 0 6px;
+    border: 0;
+  }
+
+  .scene-panel .panel-head .eyebrow,
+  .scene-panel .panel-head h2 {
+    display: none;
+  }
+
+  .scene-panel .head-actions {
+    margin-left: auto;
+  }
+
+  .scene-panel .head-actions .chip:not(.skip-phase) {
+    display: none;
+  }
+
+  .skip-phase {
+    height: 28px;
+    font-size: 10px;
+  }
+
+  /* В раскрытии, голосовании и ночью событие дня — уже история: оно съедает
+     пол-экрана, а действие должно быть сверху. На обсуждении оставляем. */
+  #board[data-phase="reveal"] .event-card,
+  #board[data-phase="vote"] .event-card,
+  #board[data-phase="night"] .event-card {
+    display: none;
+  }
+
+  /* Пять карт в две колонки: рука помещается почти целиком без скролла. */
+  .trait-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px;
+  }
+
+  .trait-grid .trait-card {
+    min-height: 92px;
+    padding: 10px;
+  }
+
+  .trait-grid .trait-value {
+    font-size: 15px;
+  }
+
+  /* «Простой вид» на телефоне не показываем — сводка всегда. */
+  html[data-mtab="play"] .discuss-plain {
+    display: none !important;
+  }
+
+  html[data-mtab="play"] .discuss-rich {
+    display: block !important;
+  }
+
+  /* Во время своего хода сетка карт уже показывает все значения —
+     дублирующее «Личное дело» прячем, чтобы не скроллить. */
+  html[data-mtab="play"] #board[data-my-turn="1"] .own-panel {
+    display: none;
+  }
+
+  .own-panel .panel-head {
+    margin-bottom: 8px;
+  }
+
+  .own-panel .panel-head h2 {
+    font-size: 17px;
+  }
+
+  /* Выжившие — горизонтальная лента, а не список на пол-экрана. */
+  .players-panel .panel-head {
+    margin-bottom: 6px;
+  }
+
+  .players-panel .panel-head h2 {
+    font-size: 16px;
+  }
+
+  .players-list {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 0;
+    padding: 0 0 4px;
+    scrollbar-width: none;
+  }
+
+  .players-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .players-row {
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 6px 10px 6px 6px;
+    border-radius: 999px;
+    background: var(--card-2);
+  }
+
+  .players-row .pname {
+    font-size: 12px;
+  }
+
+  .players-row .status,
+  .players-row .mini-badge.bot {
+    display: none;
+  }
+
+  .players-row .pdots {
+    font-size: 8px;
+  }
+
+  /* Кнопки и карточки — под палец. */
+  .btn {
+    min-height: 44px;
+  }
+
+  .trait-card {
+    min-height: 56px;
+  }
+
+  .target-card {
+    min-height: 52px;
+  }
+
+  .chip {
+    min-height: 30px;
+  }
+
+  /* ----- чат ----- */
+  html[data-mtab="play"] .chat-panel {
+    display: none;
+  }
+
+  html[data-mtab="chat"] .side-column,
+  html[data-mtab="chat"] .scene-panel {
+    display: none;
+  }
+
+  html[data-mtab="chat"] .game-grid {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  html[data-mtab="chat"] .chat-panel {
+    flex: 1 1 auto;
+    height: auto;
+    padding: 8px 10px 6px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* Заголовок «Чат» дублирует вкладку — отдаём его место ленте. */
+  html[data-mtab="chat"] .chat-panel > .panel-head {
+    display: none;
+  }
+
+  /* Баннер фазы поверх чата только мешает: фаза и так в чипе сверху. */
+  html[data-mtab="chat"] .phase-banner {
+    display: none;
+  }
+
+  .chat-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .chat-feed {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .chat-form {
+    flex: 0 0 auto;
+    padding-top: 8px;
+  }
+
+  /* 16px — чтобы iOS не зумил страницу при фокусе. */
+  .chat-form input[type="text"],
+  .chat-form input:not([type]) {
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .send-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* ----- лобби ----- */
+  .lobby-main {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .invite-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .invite-card h1 {
+    font-size: 26px;
+  }
+
+  .lobby-player {
+    padding: 8px 10px;
+  }
+
+  /* Панель старта — доком над вкладками: состав и кнопка всегда под рукой,
+     список игроков скроллится под ней. */
+  .lobby-start {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(56px + env(safe-area-inset-bottom) + 4px);
+    z-index: 35;
+    padding: 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.55);
+  }
+
+  .lobby-main {
+    padding-bottom: 200px;
+  }
+
+  html[data-mtab="play"] .lobby-chat-panel {
+    display: none;
+  }
+
+  html[data-mtab="chat"] .lobby-main {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  html[data-mtab="chat"] .lobby-main > :not(.lobby-chat-panel) {
+    display: none;
+  }
+
+  html[data-mtab="chat"] .lobby-chat-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  html[data-mtab="chat"] .lobby-chat-panel .chat-panel {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    padding: 8px 10px 6px;
+  }
+
+  /* ----- модалки ----- */
+  dialog.sheet {
+    width: calc(100vw - 20px);
+    max-width: none;
+    max-height: calc(var(--app-h, 100dvh) - 20px);
+  }
+}
+
+@media (max-width: 380px) {
+  .top-actions .sound-btn {
+    display: none;
+  }
+
+  .res {
+    padding: 0 5px;
+  }
+
+  .phase-chip {
+    padding: 0 7px;
+  }
+}

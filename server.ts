@@ -1166,6 +1166,82 @@ document.addEventListener('click', (e) => {
   new MutationObserver(sync).observe(document.body, { childList: true, subtree: true });
   sync();
 })();
+
+// Мобильные вкладки «Стол / Чат». Состояние живёт на <html>, а не на #board:
+// #board перерисовывается каждым патчем Datastar, а оболочка — нет.
+(function () {
+  const root = document.documentElement;
+  const KEY = "bunker-mtab";
+  const apply = (tab) => {
+    root.dataset.mtab = tab;
+    document.querySelectorAll("[data-mtab-btn]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.mtabBtn === tab));
+    });
+  };
+  let tab = "play";
+  try {
+    const saved = sessionStorage.getItem(KEY);
+    if (saved === "chat" || saved === "play") tab = saved;
+  } catch {
+    /* приватный режим */
+  }
+  apply(tab);
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest && e.target.closest("[data-mtab-btn]");
+    if (!btn) return;
+    tab = btn.dataset.mtabBtn;
+    try {
+      sessionStorage.setItem(KEY, tab);
+    } catch {
+      /* не критично */
+    }
+    apply(tab);
+    if (tab === "chat") {
+      markChatSeen();
+      const feed = document.getElementById("chatFeed");
+      if (feed) feed.scrollTop = feed.scrollHeight;
+    }
+  });
+
+  // Непрочитанное в чате: точка появляется, если лента выросла, пока открыт
+  // стол. Счётчик сравнивает число узлов — так замена ленты Datastar не
+  // считается новым сообщением.
+  const chatTab = () => document.querySelector('.mtab[data-mtab-btn="chat"]');
+  const messageCount = () => (document.getElementById("chatFeed")?.children.length ?? 0);
+  const boardPhase = () => document.getElementById("board")?.dataset.phase || "";
+  let seenMessages = messageCount();
+  let lastPhase = boardPhase();
+  const markChatSeen = () => {
+    seenMessages = messageCount();
+    chatTab()?.classList.remove("has-unread");
+  };
+  new MutationObserver(() => {
+    const count = messageCount();
+    if (count > seenMessages && tab !== "chat") chatTab()?.classList.add("has-unread");
+    seenMessages = count;
+    // Лобби кончилось — показываем стол, даже если игрок сидел в чате.
+    const phase = boardPhase();
+    if (phase !== lastPhase) {
+      if (lastPhase === "lobby" && phase !== "lobby" && tab === "chat") {
+        tab = "play";
+        apply(tab);
+      }
+      lastPhase = phase;
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  markChatSeen();
+
+  // iOS: клавиатура уменьшает visualViewport, а 100dvh остаётся прежним —
+  // без этого поле ввода уезжает под клавиатуру.
+  const vv = window.visualViewport;
+  if (vv) {
+    const setAppHeight = () => root.style.setProperty("--app-h", vv.height + "px");
+    vv.addEventListener("resize", setAppHeight);
+    vv.addEventListener("scroll", setAppHeight);
+    setAppHeight();
+  }
+})();
 </script>
 </body></html>`;
 }

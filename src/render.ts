@@ -193,9 +193,9 @@ function topbar(snap: Snapshot, origin: string): string {
         snap.state === "lobby"
           ? ""
           : `<div class="resources">
-        <span class="res${low(res.food, snap.aliveCount)}"><i>еда</i><b>${res.food}</b></span>
-        <span class="res${low(res.energy, 2)}"><i>энергия</i><b>${res.energy}</b></span>
-        <span class="res${low(res.meds, 0)}"><i>меды</i><b>${res.meds}</b></span>
+        <span class="res${low(res.food, snap.aliveCount)}" title="еда"><i>еда</i><b>${res.food}</b></span>
+        <span class="res${low(res.energy, 2)}" title="энергия"><i>энергия</i><b>${res.energy}</b></span>
+        <span class="res${low(res.meds, 0)}" title="медикаменты"><i>меды</i><b>${res.meds}</b></span>
       </div>`
       }
       <div class="top-actions">
@@ -891,6 +891,35 @@ function rules(snap: Snapshot): string {
 // Контракт: #topbar и #board патчатся целиком, диалоги живут в оболочке.
 // #board в партии — он же .game-grid (три колонки), в лобби — .lobby-main.
 
+const TAB_STOL_ICON =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3.2" y="3.2" width="7.2" height="7.2" rx="1.6"/><rect x="13.6" y="3.2" width="7.2" height="7.2" rx="1.6"/><rect x="3.2" y="13.6" width="7.2" height="7.2" rx="1.6"/><rect x="13.6" y="13.6" width="7.2" height="7.2" rx="1.6"/></svg>';
+const TAB_CHAT_ICON =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5.4A2.4 2.4 0 0 1 6.4 3h11.2A2.4 2.4 0 0 1 20 5.4v8.2a2.4 2.4 0 0 1-2.4 2.4H9.8L5.2 20v-4H6.4A2.4 2.4 0 0 1 4 13.6z" stroke-linejoin="round"/></svg>';
+
+// На телефоне интерфейс живёт вкладками: стол и чат по очереди, без длинного
+// скролла. На десктопе панель скрыта (display:none в базовых стилях).
+function mobileTabbar(): string {
+  return `<nav class="mtabbar" aria-label="Разделы игры">
+    <button type="button" class="mtab" data-mtab-btn="play" aria-pressed="true">
+      <span class="mtab-ico">${TAB_STOL_ICON}</span><span>Стол</span>
+    </button>
+    <button type="button" class="mtab" data-mtab-btn="chat" aria-pressed="false">
+      <span class="mtab-ico">${TAB_CHAT_ICON}</span><span>Чат</span>
+    </button>
+  </nav>`;
+}
+
+// Нужно ли действие от игрока прямо сейчас: на мобильной вкладке «Стол»
+// появляется точка, даже если открыт чат.
+function needsAction(snap: Snapshot): boolean {
+  if (snap.state === "vote") return Boolean(snap.me.alive && !snap.me.votedFor);
+  if (snap.state === "reveal")
+    return Boolean(snap.me.isMyTurn && (snap.me.canReveal || snap.me.canEndTurn));
+  if (snap.state === "lobby")
+    return Boolean(snap.me.isHost && snap.players.length >= snap.minPlayers);
+  return false;
+}
+
 export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
   const signals = `{reveal: false, msg: '', simple: false}`;
   // Оболочка одна на всё приложение: если менять её id при переходе
@@ -901,6 +930,7 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
       ${topbar(snap, origin)}
       <div id="banner" class="phase-banner"></div>
       ${renderBoard(snap, origin, tab)}
+      ${mobileTabbar()}
       <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules(snap)}</dialog>
       <div id="error"></div>
       <div id="peek" class="peek" hidden></div>
@@ -909,13 +939,15 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
 }
 
 export function renderBoard(snap: Snapshot, origin: string, tab = "day"): string {
+  const action = needsAction(snap) ? "1" : "0";
+  const myTurn = snap.state === "reveal" && snap.me.isMyTurn ? "1" : "0";
   if (snap.state === "lobby") {
-    return `<div id="board"><main class="lobby-main">
+    return `<div id="board" data-action="${action}" data-phase="lobby"><main class="lobby-main">
       ${lobby(snap, origin)}
       <div class="lobby-chat-panel">${chatPanel(snap, tab)}</div>
     </main></div>`;
   }
-  return `<main id="board" class="game-grid">
+  return `<main id="board" class="game-grid" data-action="${action}" data-phase="${esc(snap.state)}" data-my-turn="${myTurn}">
     <div class="side-column">${ownCards(snap)}${playersPanel(snap)}</div>
     ${scene(snap)}
     ${chatPanel(snap, tab)}

@@ -147,6 +147,10 @@ async function main() {
   await sleep(1600);
   const startPhase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
   note(/ПРОБУЖДЕНИЕ|РАССВЕТ/.test(startPhase), `старт: фаза ${startPhase}`);
+  note(
+    await evaluate('getComputedStyle(document.querySelector(".mtabbar")).display === "none"'),
+    "десктоп: мобильные вкладки скрыты",
+  );
 
   const bannerText = (await text('(document.getElementById("banner")||{}).textContent')).trim();
   note(bannerText.length > 0, `баннер фазы: "${bannerText}"`);
@@ -408,8 +412,32 @@ async function main() {
   });
   await sleep(700);
   const mobileOverflow = await evaluate("document.documentElement.scrollWidth");
-  note(mobileOverflow <= 391, `мобилка 390: без скролла (${mobileOverflow})`);
+  note(mobileOverflow <= 391, `мобилка 390: без горизонтального скролла (${mobileOverflow})`);
   note(await evaluate("!!document.querySelector('.game-grid')"), "мобилка 390: сетка на месте");
+  note(
+    await evaluate("document.documentElement.scrollHeight <= innerHeight + 1"),
+    "мобилка 390: страница не скроллится целиком",
+  );
+  note(
+    await evaluate('getComputedStyle(document.querySelector(".mtabbar")).display !== "none"'),
+    "мобилка 390: вкладки видны",
+  );
+  await evaluate("document.querySelector('[data-mtab-btn=\"chat\"]')?.click()");
+  await sleep(400);
+  note(
+    await evaluate(
+      'getComputedStyle(document.querySelector(".chat-panel")).display !== "none" && getComputedStyle(document.querySelector(".scene-panel")).display === "none"',
+    ),
+    "мобилка 390: вкладка чата открывает ленту",
+  );
+  await evaluate("document.querySelector('[data-mtab-btn=\"play\"]')?.click()");
+  await sleep(400);
+  note(
+    await evaluate(
+      'getComputedStyle(document.querySelector(".chat-panel")).display === "none" && getComputedStyle(document.querySelector(".scene-panel")).display !== "none"',
+    ),
+    "мобилка 390: вкладка стола возвращает игру",
+  );
 }
 
 main()
