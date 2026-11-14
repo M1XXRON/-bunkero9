@@ -154,7 +154,9 @@ const PERSONA_SYSTEM = `Ты — генератор персонажей для 
 7. Крупный багаж: одна крупная вещь или запас.
 8. Спецвозможность: строго одно из «обмен», «НЗ», «разведка».
 Значения конкретные и бытовые, 1–5 слов. Никаких повторов между игроками. Без кавычек
-внутри значений, без имён и ролей, без тайных знаний о других. Язык — русский.`;
+внутри значений, без имён и ролей, без тайных знаний о других. Язык — русский.
+Распределение: на 5–8 игроков максимум одно «ожирение» и максимум одна «тяжёлая»
+болезнь; большинство — «норма», «лёгкая» или «абсолютно здоров».`;
 
 export async function generatePersonas(
   names: string[],
@@ -175,6 +177,25 @@ export async function generatePersonas(
     if (!Array.isArray(raw) || raw.length < TRAITS.length) return null;
     out.push({ values: raw.slice(0, TRAITS.length).map((v) => clean(v, 60)) });
   }
+  // Модель любит драматичные карты: ограничиваем экстремумы, чтобы в партии
+  // не оказывалось по три ожирения и по три тяжёлых болезни. Для 5–8 игроков
+  // максимум один экстремум, для 9–15 — два. Лишние меняем на соседнюю
+  // ступень, сохраняя числа роста/веса.
+  const limit = Math.max(1, Math.ceil(names.length / 8));
+  const cap = (index: number, marker: string, replacement: string) => {
+    let seen = 0;
+    for (const persona of out) {
+      const parts = persona.values[index].split("·").map((part) => part.trim());
+      const last = (parts.at(-1) || "").toLowerCase();
+      if (!last.includes(marker)) continue;
+      seen += 1;
+      if (seen <= limit) continue;
+      parts[parts.length - 1] = replacement;
+      persona.values[index] = parts.join(" · ");
+    }
+  };
+  cap(1, "ожирение", "полнота");
+  cap(2, "тяжёл", "средняя");
   return out;
 }
 

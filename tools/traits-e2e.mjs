@@ -137,6 +137,24 @@ function neutralise(target) {
     Object.keys(content.TRAIT_EFFECTS).length >= 14,
     `эффектов в контенте: ${Object.keys(content.TRAIT_EFFECTS).length}`,
   );
+
+  // Баланс колоды: экстремумы не должны занимать четверть пула.
+  const body = content.TRAITS.find((t) => t.key === "body").values;
+  const health = content.TRAITS.find((t) => t.key === "health").values;
+  const count = (list, word) => list.filter((v) => v.toLowerCase().includes(word)).length;
+  note(
+    count(body, "ожирение") <= 3,
+    `ожирений в колоде: ${count(body, "ожирение")} / ${body.length}`,
+  );
+  note(
+    count(health, "тяжёл") <= 3,
+    `тяжёлых болезней: ${count(health, "тяжёл")} / ${health.length}`,
+  );
+  note(count(body, "норма") >= 10, `«норма» — большинство: ${count(body, "норма")}`);
+  note(
+    count(health, "абсолютно здоров") >= 4,
+    `здоровых карт: ${count(health, "абсолютно здоров")}`,
+  );
 }
 
 console.log(
