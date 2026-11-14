@@ -53,7 +53,7 @@ function neutralise(target) {
 {
   const r = room(5);
   neutralise(r);
-  r.players[0].traits[0].value = "повар";
+  r.players[0].traits.find((t) => t.cat === "profession").value = "повар";
   const cost = engine.dailyCost(r);
   note(cost.food === 2.5, `повар: еда ${cost.food} (было 5)`);
   note(cost.crewEat === -0.5, `повар: модификатор ${cost.crewEat}`);
@@ -63,8 +63,8 @@ function neutralise(target) {
 {
   const r = room(5);
   neutralise(r);
-  r.players[1].traits[1].value = "аллергия на антибиотики";
-  r.players[2].traits[1].value = "повышенный обмен";
+  r.players[1].traits.find((t) => t.cat === "health").value = "аллергия на антибиотики";
+  r.players[2].traits.find((t) => t.cat === "health").value = "повышенный обмен";
   const cost = engine.dailyCost(r);
   note(cost.food === 6, `двое едят больше: еда ${cost.food}`);
   note(cost.personalEat === 1, `личные надбавки: +${cost.personalEat}`);
@@ -75,7 +75,7 @@ function neutralise(target) {
   const r = room(5);
   neutralise(r);
   const base = engine.dailyCost(r).energy;
-  r.players[0].traits[0].value = "электрик";
+  r.players[0].traits.find((t) => t.cat === "profession").value = "электрик";
   const after = engine.dailyCost(r).energy;
   note(after === base - 1, `электрик: энергия ${base} → ${after}`);
 }
@@ -84,7 +84,7 @@ function neutralise(target) {
 {
   const r = room(5);
   neutralise(r);
-  r.players[0].traits[2].value = "ящик консервов";
+  r.players[0].traits.find((t) => t.cat === "baggage").value = "ящик консервов";
   const before = r.resources.food;
   const authored = engine.supplyOf(r);
   note(authored.food === 5, `в картах смены +${authored.food} еды (ещё не в бункере)`);
@@ -105,7 +105,7 @@ function neutralise(target) {
 {
   const r = room(5);
   neutralise(r);
-  r.players[0].traits[0].value = "повар";
+  r.players[0].traits.find((t) => t.cat === "profession").value = "повар";
   engine.skipPhase(r.code, r.hostId); // интро -> день
   const line = r.messages.map((m) => m.text).find((t) => t.startsWith("Расход бункера"));
   note(/еда −2\.5/.test(line || ""), `в ленте расход: «${line}»`);

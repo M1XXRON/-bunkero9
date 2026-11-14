@@ -83,12 +83,12 @@ try {
     [HOST, ...others].map(async (s) => ((await page(s)).match(/class="own-card/g) || []).length),
   );
   note(
-    ownAll.every((n) => n === 5),
+    ownAll.every((n) => n === 8),
     `свои карты видны у всех (${ownAll.join(",")})`,
   );
 
   // ход у первого (хост): у остальных карт на столе нет
-  note((await cards(HOST)) === 5, "хост видит свои карты для раскрытия");
+  note((await cards(HOST)) === 8, "хост видит свои карты для раскрытия");
   note((await cards(others[0])) === 0, "у второго игрока карт нет — не его ход");
 
   // чужой ход не проходит ни туда, ни обратно
@@ -97,7 +97,7 @@ try {
   note((await cards(others[0])) === 0, "чужой reveal отклонён");
   await act(others[0], "end-turn");
   await sleep(250);
-  note((await cards(HOST)) === 5, "чужой end-turn не передал ход");
+  note((await cards(HOST)) === 8, "чужой end-turn не передал ход");
 
   // хост раскрывает и подтверждает
   await act(HOST, "reveal", { index: 0 });
@@ -114,7 +114,7 @@ try {
 
   await act(HOST, "end-turn");
   await sleep(400);
-  note((await cards(others[0])) === 5, "ход перешёл ко второму игроку");
+  note((await cards(others[0])) === 8, "ход перешёл ко второму игроку");
   note((await cards(HOST)) === 0, "у хоста ход закончился");
 
   // доигрываем очередь до конца

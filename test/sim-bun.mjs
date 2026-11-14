@@ -133,7 +133,7 @@ async function main() {
   ].length;
   check(hiddenSlots > 0, `скрытые карты без значений (${hiddenSlots} слотов)`);
   const mine = (probe.match(/class="trait-card/g) || []).length;
-  check(mine <= 5, `своих карт не больше пяти (${mine})`);
+  check(mine <= 8, `своих карт не больше восьми (${mine})`);
 
   // чат: сообщение доходит до остальных
   await act(sids[0], "chat", { text: "Проверка связи", channel: "day" });

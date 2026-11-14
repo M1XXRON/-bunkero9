@@ -42,11 +42,27 @@ export type Snapshot = {
   me: {
     id: string;
     name: string;
+    ability: {
+      kind: string;
+      label: string;
+      desc: string;
+      used: boolean;
+      available: boolean;
+      pending: { stage: string; category: number | null } | null;
+      targets: { id: string; name: string; avatar?: string; avatarIndex?: number }[];
+    } | null;
     avatar: string;
     avatarIndex: number;
     isHost: boolean;
     alive: boolean;
-    traits: { cat: string; label: string; value: string; revealed: boolean; effect?: string }[];
+    traits: {
+      cat: string;
+      label: string;
+      value: string;
+      revealed: boolean;
+      effect?: string;
+      desc?: string;
+    }[];
     canReveal: boolean;
     isMyTurn: boolean;
     canEndTurn: boolean;
@@ -313,7 +329,7 @@ function botControls(snap: Snapshot): string {
 
 // ---------- игровой экран ----------
 
-// Подсказка при наведении: все пять категорий по порядку. Раскрытые — зелёным
+// Подсказка при наведении: все восемь категорий по порядку. Раскрытые — зелёным
 // со значением, скрытые — серым, только название категории (значение скрытой
 // карты физически не приходит на клиент).
 const LOCK_ICON =
@@ -400,14 +416,25 @@ function playersPanel(snap: Snapshot): string {
 function ownCards(snap: Snapshot): string {
   if (snap.state === "lobby") return "";
   const rows = snap.me.traits
-    .map(
-      (t) => `<div class="own-card ${t.revealed ? "revealed" : ""}">
+    .map((t) => {
+      const ability = snap.me.ability;
+      const special = t.cat === "special";
+      const mark = special
+        ? ability?.used
+          ? "использована"
+          : ability?.available && !ability.pending
+            ? `<button class="ability-use" data-on:click="@post('/act/ability', {payload: {action: 'start'}, retry: 'never'})">применить</button>`
+            : "готова"
+        : t.revealed
+          ? "на столе"
+          : "скрыта";
+      return `<div class="own-card ${t.revealed ? "revealed" : ""} ${special ? "special" : ""}">
         <span class="own-cat">${esc(t.label)}</span>
         <span class="own-value">${esc(t.value)}</span>
-        <span class="own-mark">${t.revealed ? "на столе" : "скрыта"}</span>
+        <span class="own-mark">${mark}</span>
         ${t.effect ? `<span class="own-eff">${esc(t.effect)}</span>` : ""}
-      </div>`,
-    )
+      </div>`;
+    })
     .join("");
   return `<section class="panel own-panel">
     <header class="panel-head">
@@ -440,6 +467,53 @@ function turnStrip(snap: Snapshot): string {
       <span class="seat-count">${turn.index} / ${turn.total}</span>
     </div>
     <div class="turn-chips">${chips}</div>
+  </div>`;
+}
+
+function abilityPanel(snap: Snapshot): string {
+  const ability = snap.me.ability;
+  if (!ability?.pending) return "";
+  const cancel = `<button class="chip ability-cancel" data-on:click="@post('/act/ability', {payload: {action: 'cancel'}, retry: 'never'})">Отмена</button>`;
+  if (ability.pending.stage === "category") {
+    const cards = snap.me.traits
+      .map((trait, index) =>
+        trait.cat === "special"
+          ? ""
+          : `<button class="ability-pick" data-on:click="@post('/act/ability', {payload: {action: 'category', index: ${index}}, retry: 'never'})">
+              <span class="ability-pick-cat">${esc(trait.label)}</span>
+              <span class="ability-pick-val">${esc(trait.value)}</span>
+              <span class="ability-pick-tag">${trait.revealed ? "на столе" : "скрыта"}</span>
+            </button>`,
+      )
+      .join("");
+    return `<div class="ability-panel">
+      <span class="eyebrow">СПЕЦВОЗМОЖНОСТЬ · ${esc(ability.label)}</span>
+      <h3>Какую карту обменять?</h3>
+      <p>Выберите свою карту — потом выберете выжившего. Карты поменяются местами,
+        категория останется у обоих.</p>
+      <div class="ability-cats">${cards}</div>
+      ${cancel}
+    </div>`;
+  }
+  const targets = ability.targets
+    .map(
+      (p) => `<button class="target-card ability-target"
+        data-on:click="@post('/act/ability', {payload: {action: 'target', target: '${p.id}'}, retry: 'never'})">
+        ${avatar(p as Player, "xs")}
+        <span class="target-name">${esc(p.name)}</span>
+      </button>`,
+    )
+    .join("");
+  return `<div class="ability-panel">
+    <span class="eyebrow">СПЕЦВОЗМОЖНОСТЬ · ${esc(ability.label)}</span>
+    <h3>${ability.kind === "swap" ? "С кем поменяться?" : "Чьё досье открыть?"}</h3>
+    <p>${
+      ability.kind === "swap"
+        ? "Карты поменяются местами. Если карта уже на столе — на столе окажется новая."
+        : "Скрытые карты увидите только вы. Остальные заметят только, что вы сверялись с досье."
+    }</p>
+    <div class="target-grid ability-targets">${targets}</div>
+    ${cancel}
   </div>`;
 }
 
@@ -749,6 +823,7 @@ function scene(snap: Snapshot): string {
         </div>
         ${headActions}
       </header>
+      ${abilityPanel(snap)}
       ${eventCard(snap)}
       ${body}
     </section>`;
@@ -881,6 +956,8 @@ function rules(snap: Snapshot): string {
         <div class="modal-section">
           <p><b>Цель.</b> Дожить до спасения. Оно приходит после ночи последнего дня — спасаются все, кто к тому моменту жив.</p>
           <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
+          <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
+          <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+6 еды, +4 энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
           <p><b>Ночь.</b> Если к утру еда или энергия на нуле, бункер теряет одного. Медикаменты могут прикрыть одну такую ночь.</p>
           <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>

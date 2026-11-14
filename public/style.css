@@ -2886,6 +2886,125 @@ body.landing {
   opacity: 0.85;
 }
 
+/* ---------- спецвозможности ---------- */
+
+.ability-panel {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.ability-panel h3 {
+  margin: 4px 0 6px;
+  font-size: 21px;
+}
+
+.ability-panel p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ability-panel .eyebrow {
+  color: var(--accent);
+}
+
+.ability-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.ability-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ability-pick:hover {
+  border-color: var(--accent);
+}
+
+.ability-pick-cat {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.ability-pick-val {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.ability-pick-tag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.ability-targets {
+  margin: 8px 0 12px;
+}
+
+.ability-cancel {
+  height: 30px;
+  font-size: 11px;
+}
+
+.ability-use {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ability-use:hover {
+  color: var(--accent-hover);
+}
+
+.own-card.special .own-cat {
+  color: var(--accent);
+}
+
+.own-card.special .own-desc {
+  grid-area: eff;
+  margin-top: 2px;
+  font-family: var(--body);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.own-card.special {
+  border-bottom-color: var(--line);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 70%);
+  padding-left: 8px;
+  padding-right: 8px;
+  border-radius: 8px;
+}
+
 /* ---------- мобильный режим: один экран, две вкладки, без длинного скролла ----------
    Всё ниже действует только на узких экранах. Десктопная раскладка (три колонки,
    постоянный чат справа) не меняется: правила живут в этом media-блоке. */
@@ -3256,6 +3375,35 @@ body.landing {
 
   .players-row .pdots {
     font-size: 8px;
+  }
+
+  /* Спецвозможность: карты и цели — по две в ряд, чтобы панель влезала
+     в экран без длинного скролла. */
+  .ability-cats,
+  .ability-targets {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px;
+  }
+
+  .ability-pick {
+    padding: 8px 10px;
+  }
+
+  .ability-pick-val {
+    font-size: 13px;
+  }
+
+  .ability-targets .target-card {
+    min-height: 52px;
+    padding: 8px 10px;
+  }
+
+  .ability-panel {
+    padding: 12px;
+  }
+
+  .ability-panel h3 {
+    font-size: 19px;
   }
 
   /* Кнопки и карточки — под палец. */

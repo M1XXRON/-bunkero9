@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { AVATARS, TRAITS, EVENTS, ENDINGS, SCENARIOS, TRAIT_EFFECTS } = require('./content');
+const { AVATARS, TRAITS, SPECIALS, EVENTS, ENDINGS, SCENARIOS, TRAIT_EFFECTS } = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -39,13 +39,33 @@ const round1 = (value) => Math.round(value * 10) / 10;
 
 // Эффект характеристики по её значению («повар», «ящик консервов», …).
 function effectOf(value) {
-  return TRAIT_EFFECTS[String(value || '').toLowerCase()] || null;
+  const key = String(value || '').toLowerCase().trim();
+  if (!key) return null;
+  if (TRAIT_EFFECTS[key]) return TRAIT_EFFECTS[key];
+  // Ранги и степени: «повар · 4 разряд», «астма · тяжёлая». Сначала первый
+  // сегмент (профессия/хобби), затем последний (тяжесть/полнота).
+  const parts = key.split('·').map((part) => part.trim()).filter(Boolean);
+  for (const part of [parts[0], parts[parts.length - 1]]) {
+    if (part && TRAIT_EFFECTS[part]) return TRAIT_EFFECTS[part];
+  }
+  return null;
+}
+
+function specialInfo(value) {
+  return SPECIALS[String(value || '').toLowerCase().trim()] || null;
 }
 
 function playerEffectText(trait) {
+  if (trait?.cat === 'special') {
+    // В руке и на столе — короткая пометка; полное описание показываем
+    // отдельной строкой в «Личном деле» (поле desc в снимке).
+    return specialInfo(trait.value) ? 'один раз за партию' : '';
+  }
   const effect = effectOf(trait?.value);
   return effect ? effect.label || '' : '';
 }
+
+const ABILITY_PHASES = ['intro', 'reveal', 'discussion', 'vote'];
 
 // Суточный расход с учётом живых носителей: повар кормит смену дешевле,
 // аллергия добавляет личную норму, электрик экономит энергию.
@@ -442,6 +462,7 @@ function checkEnd(room) {
 
 function removePlayer(room, player, cause, note, options = {}) {
   player.alive = false;
+  if (room.ability?.playerId === player.id) room.ability = null;
   player.death = { day: room.day, cause, note: note || null };
   // Мёртвый хост не должен распоряжаться темпом: передаём живому человеку,
   // если людей нет — любому живому.
@@ -735,6 +756,7 @@ function resolveVote(room) {
 function startNight(room) {
   if (room.state === 'end') return;
   room.votes = {};
+  room.ability = null;
   const alive = alivePlayers(room);
   const starving = room.resources.food <= 0;
   const cold = room.resources.energy <= 0;
@@ -813,6 +835,7 @@ function startGame(room, playerId, options = {}) {
   room.msgSeq = 0;
   room.votes = {};
   room.night = null;
+  room.ability = null;
   room.lastHealTarget = null;
   room.winner = null;
   room.phaseEndsAt = null;
@@ -843,6 +866,7 @@ function startGame(room, playerId, options = {}) {
     player.left = false;
     player.death = null;
     player.revealedThisRound = false;
+    player.abilityUsed = false;
     player.lastHealTarget = null;
     // Карты берём из пула, но если сервер принёс персонажей от модели —
     // используем их значения (порядок категорий тот же, что в TRAITS).
@@ -853,7 +877,7 @@ function startGame(room, playerId, options = {}) {
       value:
         persona && typeof persona.values?.[index] === 'string'
           ? String(persona.values[index]).slice(0, 60)
-          : pools[category.key][playerIndex],
+          : pools[category.key][playerIndex % pools[category.key].length],
       revealed: false,
     }));
   });
@@ -893,6 +917,7 @@ function createRoom({ name, avatar, socketId }) {
     msgSeq: 0,
     votes: {},
     night: null,
+    ability: null,
     lastHealTarget: null,
     winner: null,
     phaseEndsAt: null,
@@ -988,6 +1013,7 @@ function leaveRoom(code, playerId) {
     player.token = null;
     player.connected = false;
     player.socketId = null;
+    if (room.ability?.playerId === player.id) room.ability = null;
     system(room, `Выход: ${player.name}.`, 'warn');
     if (room.hostId === player.id) {
       const next = connectedPlayers(room)[0] || room.players.find((item) => item.id !== player.id) || null;
@@ -1186,6 +1212,7 @@ function rematch(code, playerId) {
     player.left = false;
     player.death = null;
     player.revealedThisRound = false;
+    player.abilityUsed = false;
     player.lastHealTarget = null;
   });
   room.state = 'lobby';
@@ -1196,6 +1223,7 @@ function rematch(code, playerId) {
   room.resources = { food: 0, energy: 0, meds: 0 };
   room.votes = {};
   room.night = null;
+  room.ability = null;
   room.lastHealTarget = null;
   room.winner = null;
   room.phaseEndsAt = null;
@@ -1235,6 +1263,129 @@ function kickPlayer(code, hostId, targetId) {
   system(room, `Исключение: ${target.name}.`, 'muted');
   changed(room);
   return { ok: true, targetSocketId: target.socketId };
+}
+
+// Спецвозможности. Одна на партию, только днём, с явным подтверждением:
+// supply — сразу, swap/peek — через выбор карты и игрока.
+function applySpecialSupply(room, player, special) {
+  const parts = [];
+  for (const [key, amount] of Object.entries(special.supply || {})) {
+    if (!amount) continue;
+    room.resources[key] = round1((room.resources[key] || 0) + amount);
+    parts.push(`${RESOURCE_LABEL[key]} +${amount}`);
+  }
+  system(room, `${player.name} вскрывает НЗ: ${parts.join(', ')}.`, 'good');
+}
+
+function useAbility(code, playerId, payload = {}) {
+  const room = rooms.get(normalizeCode(code));
+  if (!room) return { ok: false, error: 'Бункер не найден.' };
+  const player = playerById(room, playerId);
+  if (!player || !player.alive) return { ok: false, error: 'Вы не участвуете.' };
+  const trait = player.traits.find((item) => item.cat === 'special');
+  const special = specialInfo(trait?.value);
+  if (!special) return { ok: false, error: 'У вас нет спецвозможности.' };
+
+  const action = typeof payload.action === 'string' ? payload.action : 'start';
+
+  if (action === 'cancel') {
+    if (room.ability?.playerId === player.id) {
+      room.ability = null;
+      changed(room);
+    }
+    return { ok: true };
+  }
+
+  if (!ABILITY_PHASES.includes(room.state)) {
+    return { ok: false, error: 'Спецвозможность доступна только днём.' };
+  }
+  if (player.abilityUsed) return { ok: false, error: 'Возможность уже израсходована.' };
+  if (room.ability && room.ability.playerId !== player.id) {
+    return { ok: false, error: 'Сейчас кто-то уже применяет спецвозможность.' };
+  }
+
+  if (action === 'start') {
+    if (special.kind === 'supply') {
+      applySpecialSupply(room, player, special);
+      player.abilityUsed = true;
+      room.ability = null;
+      changed(room);
+      return { ok: true };
+    }
+    room.ability = {
+      playerId: player.id,
+      kind: special.kind,
+      stage: special.kind === 'swap' ? 'category' : 'target',
+      category: null,
+    };
+    changed(room);
+    return { ok: true };
+  }
+
+  const pending = room.ability;
+  if (!pending || pending.playerId !== player.id) {
+    return { ok: false, error: 'Сначала начните спецвозможность.' };
+  }
+
+  if (pending.stage === 'category' && action === 'category') {
+    const index = Number(payload.index);
+    const chosen = player.traits[index];
+    if (!chosen || chosen.cat === 'special') {
+      return { ok: false, error: 'Эту карту менять нельзя.' };
+    }
+    pending.category = index;
+    pending.stage = 'target';
+    changed(room);
+    return { ok: true };
+  }
+
+  if (pending.stage === 'target' && action === 'target') {
+    const target = playerById(room, String(payload.target));
+    if (!target || !target.alive) return { ok: false, error: 'Этот выживший уже не с нами.' };
+    if (target.id === player.id) return { ok: false, error: 'Нужен другой выживший.' };
+
+    if (pending.kind === 'swap') {
+      const index = Number(pending.category);
+      const mine = player.traits[index];
+      const theirs = target.traits[index];
+      if (!mine || !theirs || mine.cat === 'special') {
+        return { ok: false, error: 'Карта не найдена.' };
+      }
+      player.traits[index] = theirs;
+      target.traits[index] = mine;
+      const open = mine.revealed && theirs.revealed;
+      const detail = open
+        ? ` Теперь у ${player.name} — ${theirs.value}, у ${target.name} — ${mine.value}.`
+        : '';
+      system(
+        room,
+        `Спецвозможность · ${player.name} и ${target.name} обменялись картами: ${mine.label}.${detail}`,
+        'warn',
+      );
+    } else if (pending.kind === 'peek') {
+      const hidden = target.traits.filter((item) => !item.revealed);
+      const list = hidden.length
+        ? hidden.map((item) => `${item.label}: ${item.value}`).join('; ')
+        : 'все карты уже на столе';
+      pushMessage(room, {
+        channel: 'system',
+        kind: 'system',
+        tone: 'info',
+        to: player.id,
+        text: `Разведка · ${target.name} — ${list}.`,
+      });
+      system(room, `Спецвозможность · ${player.name} сверяется с досье ${target.name}.`, 'muted');
+    } else {
+      return { ok: false, error: 'Неизвестная спецвозможность.' };
+    }
+
+    player.abilityUsed = true;
+    room.ability = null;
+    changed(room);
+    return { ok: true };
+  }
+
+  return { ok: false, error: 'Неизвестное действие.' };
 }
 
 function messagesFor(room, viewer) {
@@ -1407,6 +1558,10 @@ function serializeFor(room, viewer) {
     value: trait.value,
     revealed: trait.revealed,
     effect: playerEffectText(trait),
+    desc:
+      trait.cat === 'special'
+        ? specialInfo(trait.value)?.desc || ''
+        : '',
   }));
   const me = {
     id: viewer.id,
@@ -1433,6 +1588,32 @@ function serializeFor(room, viewer) {
     revealedThisRound: Boolean(viewer.revealedThisRound),
     votedFor: room.state === 'vote' ? room.votes[viewer.id] || null : null,
     death: viewer.death,
+    ability: (() => {
+      const trait = viewer.traits.find((item) => item.cat === 'special');
+      const special = specialInfo(trait?.value);
+      if (!special) return null;
+      const pending = room.ability?.playerId === viewer.id ? room.ability : null;
+      return {
+        kind: special.kind,
+        label: special.label,
+        desc: special.desc,
+        used: Boolean(viewer.abilityUsed),
+        available: Boolean(
+          viewer.alive && !viewer.abilityUsed && ABILITY_PHASES.includes(room.state),
+        ),
+        pending: pending
+          ? { stage: pending.stage, category: pending.category ?? null }
+          : null,
+        targets: alive
+          .filter((item) => item.id !== viewer.id)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            avatar: item.avatar,
+            avatarIndex: item.avatarIndex,
+          })),
+      };
+    })(),
   };
 
   return {
@@ -1530,6 +1711,7 @@ module.exports = {
   dailyCost,
   supplyOf,
   castVote,
+  useAbility,
   sendChat,
   rematch,
   setPace,

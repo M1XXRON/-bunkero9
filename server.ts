@@ -922,6 +922,10 @@ async function handleAction(
       const result = engine.castVote(session.room, playerId, String(payload.target));
       return result?.ok === false ? fail(session, result.error) : done();
     }
+    case "ability": {
+      const result = engine.useAbility(session.room, playerId, payload);
+      return result?.ok === false ? fail(session, result.error) : done();
+    }
     case "chat": {
       const channel = payload.channel === "dead" ? payload.channel : "day";
       if (session.player) tabs.set(session.room + ":" + session.player, channel);

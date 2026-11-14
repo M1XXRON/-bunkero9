@@ -172,7 +172,7 @@ async function main() {
     note(peekOpen, "подсказка при наведении открывается");
     if (peekOpen) {
       const rows = await evaluate("document.querySelectorAll('#peek .peek-row').length");
-      note(rows === 5, `в подсказке все пять категорий (${rows})`);
+      note(rows === 8, `в подсказке все восемь категорий (${rows})`);
       const open = await evaluate("document.querySelectorAll('#peek .peek-row.on').length");
       note(open === 0, `скрытые карты не раскрываются (открыто ${open})`);
       // у скрытой карты значения нет вовсе — только категория
@@ -265,7 +265,7 @@ async function main() {
       const cards = await evaluate("document.querySelectorAll('.trait-card').length");
       note(cards > 0, `раскрытие: карт отрисовано (${cards})`);
       const ownCards = await evaluate("document.querySelectorAll('.own-card').length");
-      note(ownCards === 5, `свои карты всегда на экране (${ownCards})`);
+      note(ownCards === 8, `свои карты всегда на экране (${ownCards})`);
       const queue = await evaluate("document.querySelectorAll('.turn-chip').length");
       note(queue >= 5, `очередь раскрытия видна (${queue})`);
       await evaluate("document.querySelector('.trait-card').click()");
