@@ -206,6 +206,30 @@ async function main() {
     "чат: поле очистилось",
   );
 
+  // кнопка отправки: серая на пустом поле, красная при вводе
+  const sendIdle = await evaluate(
+    'getComputedStyle(document.querySelector(".send-btn")).backgroundColor',
+  );
+  await evaluate(`(() => {
+    const i = document.getElementById("chatInput");
+    i.value = "x"; i.dispatchEvent(new Event("input", { bubbles: true }));
+    return 1;
+  })()`);
+  // ждём transition (0.15 с), иначе поймаем промежуточный цвет
+  await sleep(300);
+  const sendTyped = await evaluate(
+    'getComputedStyle(document.querySelector(".send-btn")).backgroundColor',
+  );
+  await evaluate(`(() => {
+    const i = document.getElementById("chatInput");
+    i.value = ""; i.dispatchEvent(new Event("input", { bubbles: true }));
+    return 1;
+  })()`);
+  note(
+    sendIdle !== "rgb(255, 53, 0)" && sendTyped === "rgb(255, 53, 0)",
+    `кнопка чата: покой ${sendIdle}, ввод ${sendTyped}`,
+  );
+
   // модалки: остались только правила (досье убрано вместе с ролями)
   const rulesBtn = await evaluate(
     '[...document.querySelectorAll("button")].find((b) => /Правила/.test(b.textContent))?.getAttribute("data-on:click") || ""',

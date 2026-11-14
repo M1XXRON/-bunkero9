@@ -1429,7 +1429,9 @@ button {
 
 /* Кнопка отправки загорается, только когда в поле есть текст: пустой
    красный квадрат выглядел как «уже можно жать», хотя отправлять нечего.
-   :has() переживает морфы Datastar — классы на кнопке сбрасывались бы. */
+   :has() переживает морфы Datastar — классы на кнопке сбрасывались бы.
+   Селектор именно #chatInput: `input:not(:placeholder-shown)` матчил ещё и
+   hidden-поле channel, поэтому кнопка горела всегда. */
 .send-btn {
   flex: 0 0 auto;
   width: 42px;
@@ -1451,12 +1453,12 @@ button {
   color: var(--muted);
 }
 
-.chat-form:has(input:not(:placeholder-shown)) .send-btn:not(:disabled) {
+.chat-form:has(#chatInput:not(:placeholder-shown)) .send-btn:not(:disabled) {
   background: var(--accent);
   color: #fff;
 }
 
-.chat-form:has(input:not(:placeholder-shown)) .send-btn:not(:disabled):hover {
+.chat-form:has(#chatInput:not(:placeholder-shown)) .send-btn:not(:disabled):hover {
   background: var(--accent-hover);
 }
 
