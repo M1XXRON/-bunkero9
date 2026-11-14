@@ -33,7 +33,10 @@ const MODE = (process.env.BUNKER_AI ?? (KEY ? "live" : "off")).toLowerCase();
 // Шлюз OpenCode Go просит стабильный id сессии; остальным провайдерам
 // заголовок не нужен и может быть лишним.
 const IS_OPENCODE = BASE.includes("opencode.ai");
-const SESSION_ID = process.env.BUNKER_AI_SESSION || `bunker9-${crypto.randomUUID()}`;
+// Сессия — на один вызов, а не на процесс: при параллельной генерации
+// (несколько комнат, лобби + событие) общий id путал маршрутизацию Go-шлюза,
+// и часть ответов обрывалась на finish_reason=length.
+const SESSION_ID = process.env.BUNKER_AI_SESSION || "";
 const REASONING = process.env.BUNKER_AI_REASONING || "";
 
 export const aiMode = MODE;
@@ -41,12 +44,15 @@ export const aiEnabled = () => MODE === "live" || MODE === "mock";
 
 type Json = Record<string, unknown>;
 
-// Один вызов модели. Никогда не бросает: на любую ошибку возвращает null,
+// Один запрос к модели. Никогда не бросает: на любую ошибку возвращает null,
 // вызывающая сторона откатывается на статичное поведение.
-async function chatJson(system: string, user: string, maxTokens = 700): Promise<Json | null> {
-  if (!aiEnabled()) return null;
-  if (MODE === "mock") return mockAnswer(system, user);
-
+// retry=true — ответ оборван по max_tokens (finish_reason=length): имеет смысл
+// повторить с большим бюджетом, потому что часть токенов ушла на reasoning.
+async function requestJson(
+  system: string,
+  user: string,
+  maxTokens: number,
+): Promise<{ data: Json | null; retry: boolean }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -57,7 +63,9 @@ async function chatJson(system: string, user: string, maxTokens = 700): Promise<
         authorization: `Bearer ${KEY}`,
         // Go-шлюз просит идентифицировать клиента своим user-agent, а не SDK.
         "user-agent": "bunker9-game/2.0",
-        ...(IS_OPENCODE ? { "x-opencode-session": SESSION_ID } : {}),
+        ...(IS_OPENCODE
+          ? { "x-opencode-session": SESSION_ID || `bunker9-${crypto.randomUUID()}` }
+          : {}),
       },
       body: JSON.stringify({
         model: MODEL,
@@ -77,30 +85,49 @@ async function chatJson(system: string, user: string, maxTokens = 700): Promise<
       // без него в логах оставался только код.
       const body = await res.text().catch(() => "");
       console.warn(`[ai] ${res.status} ${res.statusText}: ${body.slice(0, 200)}`);
-      return null;
+      return { data: null, retry: false };
     }
     const data: any = await res.json();
     const choice = data?.choices?.[0];
     const text = choice?.message?.content;
+    const reason = choice?.finish_reason;
+    const truncated = reason === "length";
     if (typeof text !== "string" || !text.trim()) {
-      console.warn(`[ai] пустой ответ (finish_reason=${choice?.finish_reason ?? "?"})`);
-      return null;
+      console.warn(`[ai] пустой ответ (finish_reason=${reason ?? "?"}, max_tokens=${maxTokens})`);
+      return { data: null, retry: truncated };
     }
     try {
-      return JSON.parse(text) as Json;
+      return { data: JSON.parse(text) as Json, retry: false };
     } catch {
       // Обрезанный по max_tokens JSON — самый частый сбой: видно по finish_reason.
       console.warn(
-        `[ai] битый JSON (finish_reason=${choice?.finish_reason ?? "?"}, ${text.length} симв.): ${text.slice(0, 120)}…${text.slice(-60)}`,
+        `[ai] битый JSON (finish_reason=${reason ?? "?"}, ${text.length} симв., max_tokens=${maxTokens}): ${text.slice(0, 120)}…${text.slice(-60)}`,
       );
-      return null;
+      return { data: null, retry: truncated };
     }
   } catch (error) {
     console.warn("[ai] вызов не удался:", (error as Error)?.message);
-    return null;
+    return { data: null, retry: false };
   } finally {
     clearTimeout(timer);
   }
+}
+
+// GLM и DeepSeek иногда тратят заметную часть бюджета на reasoning и обрывают
+// JSON на середине (finish_reason=length). Один повтор с удвоенным лимитом
+// вытягивает такие ответы; обычные вызовы остаются в один запрос.
+async function chatJson(system: string, user: string, maxTokens = 700): Promise<Json | null> {
+  if (!aiEnabled()) return null;
+  if (MODE === "mock") return mockAnswer(system, user);
+  let budget = maxTokens;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { data, retry } = await requestJson(system, user, budget);
+    if (data) return data;
+    if (!retry || attempt === 1) return null;
+    budget = Math.min(4000, maxTokens * 2);
+    console.warn(`[ai] повтор с max_tokens=${budget}`);
+  }
+  return null;
 }
 
 const clean = (value: unknown, limit: number): string =>
@@ -128,8 +155,9 @@ export async function generatePersonas(
     PERSONA_SYSTEM,
     `Игроков: ${names.length}. Контекст катастрофы: ${catastrophe}. Позывные: ${names.join(", ")}.`,
     // 5 карт × N игроков: на 15 человек 600 токенов обрезали JSON на середине
-    // (Unexpected EOF) и все карты уезжали в статичный пул.
-    900,
+    // (Unexpected EOF) и все карты уезжали в статичный пул. Запас нужен ещё и
+    // потому, что GLM иногда тратит часть бюджета на reasoning.
+    3000,
   );
   const list = Array.isArray(data?.players) ? (data.players as any[]) : null;
   if (!list || list.length < names.length) return null;
@@ -157,7 +185,7 @@ export async function generateEvent(context: string): Promise<AiEvent | null> {
   const data = await chatJson(
     EVENT_SYSTEM,
     `Состояние партии: ${context}. Придумай событие для следующего дня.`,
-    400,
+    2000,
   );
   if (!data) return null;
   const title = clean(data.title, 60);
@@ -179,7 +207,7 @@ const RECAP_SYSTEM = `Ты — комментатор партий в «Бунк
 Без морализаторства и без выдуманных событий. Язык — русский.`;
 
 export async function generateRecap(log: string): Promise<Recap | null> {
-  const data = await chatJson(RECAP_SYSTEM, `Лог партии:\n${log}`, 800);
+  const data = await chatJson(RECAP_SYSTEM, `Лог партии:\n${log}`, 2500);
   if (!data) return null;
   const title = clean(data.title, 60);
   const paragraphs = Array.isArray(data.paragraphs)
@@ -209,7 +237,7 @@ export async function generateStory(): Promise<{
   premise: string;
   threat: string;
 } | null> {
-  const data = await chatJson(STORY_SYSTEM, "Придумай новую партию.", 400);
+  const data = await chatJson(STORY_SYSTEM, "Придумай новую партию.", 2000);
   const title = clean(data?.title, 40);
   const premise = clean(data?.premise, 260);
   const threat = clean(data?.threat, 80);
@@ -227,7 +255,7 @@ const HINTS_SYSTEM = `Ты — ведущий игры «Бункер». По п
 не упоминай скрытые значения карт. Язык — русский.`;
 
 export async function generateHints(context: string): Promise<string[] | null> {
-  const data = await chatJson(HINTS_SYSTEM, `Публичная картина дня: ${context}`, 400);
+  const data = await chatJson(HINTS_SYSTEM, `Публичная картина дня: ${context}`, 2000);
   const list = Array.isArray(data?.hints) ? (data.hints as unknown[]) : null;
   if (!list) return null;
   const hints = list
@@ -247,7 +275,7 @@ const EPITAPH_SYSTEM = `Ты — ведущий игры «Бункер». Од�
 его здоровье, профессию, багаж или привычку. Язык — русский.`;
 
 export async function generateEpitaph(context: string): Promise<string | null> {
-  const data = await chatJson(EPITAPH_SYSTEM, `Погибает: ${context}`, 200);
+  const data = await chatJson(EPITAPH_SYSTEM, `Погибает: ${context}`, 1500);
   const line = clean(data?.line, 160);
   return line || null;
 }

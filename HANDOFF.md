@@ -115,9 +115,17 @@ public/         style.css, sound.js (WebAudio), vendor/datastar-1.0.5.js
 - обязателен заголовок `x-opencode-session` (без него 400 `MissingSessionID`);
   `ai.ts` отправляет его автоматически, id — на процесс или `BUNKER_AI_SESSION`;
 - шлюз просит свой `user-agent`, а не SDK — отправляем `bunker9-game/2.0`;
-- DeepSeek V4 — reasoning-модель: без `BUNKER_AI_REASONING=none` она тратит
-  `max_tokens` на размышления и отдаёт пустой `content`; GLM этого не требует;
-- у GLM `max_tokens` персонажей поднят до 900: на 15 игроков 600 обрезали JSON;
+- reasoning-модели тратят `max_tokens` на размышления и обрывают JSON. Рабочий
+  режим для GLM — `BUNKER_AI_REASONING=low`: 0 reasoning-токенов, 1–3 с на вызов.
+  `none` у GLM иногда отдаёт 400 «Endpoint is unavailable», а без параметра
+  модель тратит 850–1450 reasoning-токенов и 8–12 с на вызов;
+- GLM 5.3 Flash иногда «думает»: в usage прилетает 0–1400 reasoning-токенов,
+  и на маленьком `max_tokens` JSON обрывается (`finish_reason=length`) или
+  приходит пустым. Поэтому бюджеты подняты (персонажи 3000, разбор 2500,
+  остальное 1500–2000), а `chatJson` делает один повтор с удвоенным лимитом
+  (до 4000);
+- 15 персонажей генерируются до ~16 с, но старт их не ждёт: не успели — карты
+  из `content.js`;
 - меню моделей и лимитов: `/docs/console/go`, список — `GET …/go/openai/v1/models`.
 
 Проверка на mock (без сети): `bun tools/ai-e2e.mjs` (входит в `verify`).
@@ -130,7 +138,7 @@ public/         style.css, sound.js (WebAudio), vendor/datastar-1.0.5.js
 BUNKER_AI=live
 BUNKER_AI_URL=https://opencode.ai/inference/go/openai/v1
 BUNKER_AI_MODEL=glm-5.3-flash
-BUNKER_AI_TIMEOUT_MS=25000
+BUNKER_AI_TIMEOUT_MS=35000
 BUNKER_AI_KEY=<ключ OpenCode Go, только в ai.conf>
 ```
 

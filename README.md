@@ -196,21 +196,21 @@ VPS_HOST=45.15.67.190 ./deploy/vps/deploy.sh   # гейт verify внутри
 
 ### Переменные окружения
 
-| Переменная             | По умолчанию                  | Назначение                                                     |
-| ---------------------- | ----------------------------- | -------------------------------------------------------------- |
-| `PORT`                 | `3100`                        | порт HTTP-сервера                                              |
-| `HOST`                 | `0.0.0.0`                     | интерфейс; на проде `127.0.0.1`                                |
-| `PUBLIC_DIR`           | `./public`                    | каталог статики                                                |
-| `BUNKER_DB`            | `./data/bunker.db`            | путь к SQLite                                                  |
-| `BUNKER_IDLE_MIN`      | `30`                          | через сколько минут убирать брошенную комнату                  |
-| `BUNKER_TEST`          | —                             | ускоренные таймеры (0.7–0.9 с) для тестов                      |
-| `BUNKER_AI`            | `live` при ключе, иначе `off` | `live` / `mock` / `off`                                        |
-| `BUNKER_AI_KEY`        | —                             | ключ OpenAI-совместимого API (только на сервере)               |
-| `BUNKER_AI_URL`        | `https://api.openai.com/v1`   | базовый URL API                                                |
-| `BUNKER_AI_MODEL`      | `gpt-4o-mini`                 | модель                                                         |
-| `BUNKER_AI_TIMEOUT_MS` | `12000`                       | таймаут одного вызова                                          |
-| `BUNKER_AI_REASONING`  | —                             | `reasoning_effort`; для DeepSeek — `none` (иначе пустой ответ) |
-| `BUNKER_AI_SESSION`    | случайный на процесс          | id сессии для OpenCode Go (`x-opencode-session`)               |
+| Переменная             | По умолчанию                  | Назначение                                         |
+| ---------------------- | ----------------------------- | -------------------------------------------------- |
+| `PORT`                 | `3100`                        | порт HTTP-сервера                                  |
+| `HOST`                 | `0.0.0.0`                     | интерфейс; на проде `127.0.0.1`                    |
+| `PUBLIC_DIR`           | `./public`                    | каталог статики                                    |
+| `BUNKER_DB`            | `./data/bunker.db`            | путь к SQLite                                      |
+| `BUNKER_IDLE_MIN`      | `30`                          | через сколько минут убирать брошенную комнату      |
+| `BUNKER_TEST`          | —                             | ускоренные таймеры (0.7–0.9 с) для тестов          |
+| `BUNKER_AI`            | `live` при ключе, иначе `off` | `live` / `mock` / `off`                            |
+| `BUNKER_AI_KEY`        | —                             | ключ OpenAI-совместимого API (только на сервере)   |
+| `BUNKER_AI_URL`        | `https://api.openai.com/v1`   | базовый URL API                                    |
+| `BUNKER_AI_MODEL`      | `gpt-4o-mini`                 | модель                                             |
+| `BUNKER_AI_TIMEOUT_MS` | `12000`                       | таймаут одного вызова                              |
+| `BUNKER_AI_REASONING`  | —                             | `reasoning_effort`: GLM — `low`, DeepSeek — `none` |
+| `BUNKER_AI_SESSION`    | случайный на процесс          | id сессии для OpenCode Go (`x-opencode-session`)   |
 
 Служебные точки: `GET /health` (комнаты, сессии, база), `GET /api/games`
 (последние 10 партий), `GET /stream` (SSE, zstd/brotli), `POST /act/:cmd` (действия).
