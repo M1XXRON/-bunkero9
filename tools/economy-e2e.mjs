@@ -59,8 +59,8 @@ console.log(
   ` 15 игроков: база ${JSON.stringify(bigBase)}, всего еды ${big.resources.food} (припасы +${bigBase.foodSupply})`,
 );
 
-note(smallBase.food === 26, `5 игроков: еда = (R−1)·5+6 (${smallBase.food})`);
-note(bigBase.food === 96, `15 игроков: еда = (R−1)·15+6 (${bigBase.food})`);
+note(smallBase.food === 31, `5 игроков: еда = R·5+6 (${smallBase.food})`);
+note(bigBase.food === 111, `15 игроков: еда = R·15+6 (${bigBase.food})`);
 note(
   big.resources.food > small.resources.food,
   `15 игроков: еды больше (${big.resources.food} > ${small.resources.food})`,

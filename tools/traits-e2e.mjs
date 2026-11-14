@@ -157,6 +157,29 @@ function neutralise(target) {
   );
 }
 
+// ---------- 8. цена изгнания в голосовании ----------
+{
+  const r = room(5);
+  r.state = "vote";
+  const target = r.players[1];
+  const body = target.traits.find((t) => t.cat === "body");
+  body.value = "182 см · 119 кг · ожирение";
+  body.revealed = false;
+  const first = engine.serializeFor(r, r.players[0]);
+  const cost1 = first.players.find((p) => p.id === target.id).leaveCost;
+  note(Boolean(cost1), `цена изгнания считается (${JSON.stringify(cost1)})`);
+  const second = engine.serializeFor(r, r.players[0]);
+  const cost2 = second.players.find((p) => p.id === target.id).leaveCost;
+  note(cost2.food === cost1.food, "скрытая карта не меняет цену изгнания");
+  body.revealed = true;
+  const third = engine.serializeFor(r, r.players[0]);
+  const cost3 = third.players.find((p) => p.id === target.id).leaveCost;
+  note(
+    cost3.food < cost1.food,
+    `после раскрытия ожирения экономия больше (${cost1.food} → ${cost3.food})`,
+  );
+}
+
 console.log(
   problems.length ? `\nпровалы: ${problems.join(" | ")}` : "\nхарактеристики: проверки прошли",
 );

@@ -234,8 +234,7 @@ const SPECIALS = {
   нз: {
     kind: 'supply',
     label: 'НЗ',
-    desc: 'Вскрыть неприкосновенный запас: +6 еды, +4 энергии, +1 медикамент.',
-    supply: { food: 6, energy: 4, meds: 1 },
+    desc: 'Вскрыть неприкосновенный запас: еда и энергия по размеру смены, +1 медикамент.',
   },
   разведка: {
     kind: 'peek',
@@ -243,6 +242,16 @@ const SPECIALS = {
     desc: 'Посмотреть скрытые карты одного выжившего. Видно только вам.',
   },
 };
+
+// НЗ масштабируется по составу: на 5 игроков это 6 еды / 4 энергии, на 15 —
+// 15 еды / 5 энергии. Фиксированные числа делали карту бесполезной в большой смене.
+function specialSupply(total) {
+  return {
+    food: Math.max(6, total),
+    energy: Math.max(4, Math.ceil(total / 3)),
+    meds: 1,
+  };
+}
 
 // Эффекты характеристик. Ключ — точное значение или его первый/последний
 // сегмент до «·»: «повар · 4 разряд» даёт эффект «повар», «астма · тяжёлая» —
@@ -493,4 +502,13 @@ const ENDINGS = {
   },
 };
 
-module.exports = { AVATARS, TRAITS, SPECIALS, EVENTS, ENDINGS, SCENARIOS, TRAIT_EFFECTS };
+module.exports = {
+  AVATARS,
+  TRAITS,
+  SPECIALS,
+  specialSupply,
+  EVENTS,
+  ENDINGS,
+  SCENARIOS,
+  TRAIT_EFFECTS,
+};

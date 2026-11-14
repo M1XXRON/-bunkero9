@@ -1255,6 +1255,28 @@ button {
   color: var(--faint);
 }
 
+.target-leave {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+}
+
+.target-leave b {
+  font-weight: 600;
+}
+
+.target-leave b.down {
+  color: var(--ok);
+}
+
+.target-leave b.up {
+  color: var(--bad);
+}
+
 .target-votes {
   grid-area: votes;
   min-width: 20px;

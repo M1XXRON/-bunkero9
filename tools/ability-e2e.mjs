@@ -63,6 +63,20 @@ const indexOf = (player, cat) => player.traits.findIndex((t) => t.cat === cat);
   note(again.ok === false, `повтор отклонён: ${again.error}`);
 }
 
+// ---------- 2b. НЗ масштабируется по составу ----------
+{
+  const r = room(15);
+  const p = r.players[0];
+  special(p).value = "НЗ";
+  const before = { ...r.resources };
+  engine.useAbility(r.code, p.id, { action: "start" });
+  note(r.resources.food === before.food + 15, `НЗ на 15: еда +${r.resources.food - before.food}`);
+  note(
+    r.resources.energy === before.energy + 5,
+    `НЗ на 15: энергия +${r.resources.energy - before.energy}`,
+  );
+}
+
 // ---------- 3. обмен: карты меняются местами вместе с публичностью ----------
 {
   const r = room(5);

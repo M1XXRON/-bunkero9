@@ -25,6 +25,7 @@ export type Player = {
     effect?: string | null;
     impact?: { kind: string; label: string } | null;
   }[];
+  leaveCost?: { food: number; energy: number } | null;
   traitsRevealed: number;
   spokeToday: boolean;
   totalTraits: number;
@@ -689,6 +690,15 @@ function voteScene(snap: Snapshot): string {
         ${avatar(p, "xs")}
         <span class="target-name">${esc(p.name)}</span>
         <span class="target-meta">${p.traitsRevealed}/${p.totalTraits} карт</span>
+        ${
+          p.leaveCost
+            ? `<span class="target-leave">≈ если изгнать: <b class="${p.leaveCost.food < 0 ? "down" : p.leaveCost.food > 0 ? "up" : ""}">${
+                p.leaveCost.food < 0 ? "−" : p.leaveCost.food > 0 ? "+" : ""
+              }${Math.abs(p.leaveCost.food)} еды</b> · <b class="${p.leaveCost.energy < 0 ? "down" : p.leaveCost.energy > 0 ? "up" : ""}">${
+                p.leaveCost.energy < 0 ? "−" : p.leaveCost.energy > 0 ? "+" : ""
+              }${Math.abs(p.leaveCost.energy)} энергии</b>/день</span>`
+            : ""
+        }
         <span class="target-votes ${p.votesAgainst ? "" : "zero"}">${p.votesAgainst}</span>
       </button>`;
     })
@@ -1007,15 +1017,17 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
 // ---------- модалки ----------
 
 function rules(snap: Snapshot): string {
+  const nzFood = Math.max(6, snap.totalCount);
+  const nzEnergy = Math.max(4, Math.ceil(snap.totalCount / 3));
   return `
         <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
         <div class="modal-section">
-          <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня — спасаются все, кто к тому моменту жив.</p>
+          <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня и только если еда и энергия не на нуле: без связи сигнал не уходит. Спасаются все, кто к тому моменту жив.</p>
           <p><b>Сценарий.</b> Партия начинается без таймера: прочитайте катастрофу и нажмите «Я прочитал». Когда прочитают все (или хост откроет день), начнётся раскрытие.</p>
           <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
           <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
-          <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+6 еды, +4 энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
+          <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+${nzFood} еды, +${nzEnergy} энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
           <p><b>Кризис.</b> Отдельной ночи нет: сразу после голосования бункер проверяет запасы. Если еда или энергия на нуле, он теряет одного; медикаменты могут прикрыть один такой переход.</p>
           <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>

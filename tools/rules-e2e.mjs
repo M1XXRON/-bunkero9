@@ -127,6 +127,33 @@ const hostIdOf = (room) => room.hostId;
   note(room.state === "reveal" || room.state === "end", `сразу следующий день (${room.state})`);
 }
 
+// ---------- 5b. спасение после голосования и только с запасами ----------
+{
+  const { room, host } = makeRoom(5);
+  engine.startGame(room, host.id);
+  room.day = room.rescueDay;
+  room.state = "vote";
+  room.resources.food = 0;
+  room.resources.energy = 5;
+  room.resources.meds = 0;
+  engine.skipPhase(room.code, host.id);
+  note(room.winner === "none", `нулевая еда — спасения нет (${room.winner})`);
+  note(
+    room.messages.some((m) => m.text.includes("Спасение не пришло")),
+    "в ленте объяснение, почему сигнал не ушёл",
+  );
+}
+{
+  const { room, host } = makeRoom(5);
+  engine.startGame(room, host.id);
+  room.day = room.rescueDay;
+  room.state = "vote";
+  room.resources.food = 5;
+  room.resources.energy = 5;
+  engine.skipPhase(room.code, host.id);
+  note(room.winner === "survived", `с запасами — спасение (${room.winner})`);
+}
+
 // ---------- 6. боты после рестарта ----------
 {
   const { room, host } = makeRoom(2);

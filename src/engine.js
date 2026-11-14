@@ -1,7 +1,16 @@
 'use strict';
 
 const crypto = require('crypto');
-const { AVATARS, TRAITS, SPECIALS, EVENTS, ENDINGS, SCENARIOS, TRAIT_EFFECTS } = require('./content');
+const {
+  AVATARS,
+  TRAITS,
+  SPECIALS,
+  specialSupply,
+  EVENTS,
+  ENDINGS,
+  SCENARIOS,
+  TRAIT_EFFECTS,
+} = require('./content');
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -55,6 +64,15 @@ function specialInfo(value) {
   return SPECIALS[String(value || '').toLowerCase().trim()] || null;
 }
 
+function specialDescription(special, total) {
+  if (!special) return '';
+  if (special.kind === 'supply') {
+    const supply = specialSupply(total);
+    return `Вскрыть НЗ: +${supply.food} еды, +${supply.energy} энергии, +${supply.meds} медикамент.`;
+  }
+  return special.desc;
+}
+
 function playerEffectText(trait) {
   if (trait?.cat === 'special') {
     // В руке и на столе — короткая пометка; полное описание показываем
@@ -101,14 +119,14 @@ const ABILITY_PHASES = ['intro', 'reveal', 'discussion', 'vote'];
 
 // Суточный расход с учётом живых носителей: повар кормит смену дешевле,
 // аллергия добавляет личную норму, электрик экономит энергию.
-function dailyCost(room) {
-  const alive = alivePlayers(room);
-  const count = Math.max(1, alive.length);
+function costFor(players, revealedOnly = false) {
+  const count = Math.max(1, players.length);
   let crewEat = 0;
   let crewPower = 0;
   let personalEat = 0;
-  for (const player of alive) {
+  for (const player of players) {
     for (const trait of player.traits) {
+      if (revealedOnly && !trait.revealed) continue;
       const effect = effectOf(trait.value);
       if (!effect) continue;
       if (effect.crewEat) crewEat += effect.crewEat;
@@ -121,6 +139,10 @@ function dailyCost(room) {
   const basePower = Math.max(2, Math.ceil(count / ENERGY_PER_PLAYER));
   const energy = Math.max(1, basePower + crewPower);
   return { food: round1(food), energy: round1(energy), crewEat, crewPower, personalEat };
+}
+
+function dailyCost(room) {
+  return costFor(alivePlayers(room));
 }
 
 const RESOURCE_LABEL = { food: 'еда', energy: 'энергия', meds: 'медикаменты' };
@@ -170,11 +192,12 @@ function energyCost(room) {
 function startResources(total) {
   const rescue = rescueDayFor(total);
   const energy = Math.max(2, Math.ceil(total / ENERGY_PER_PLAYER));
+  // Запас на все дни до спасения + небольшой буфер. Спасение проверяется
+  // после кризиса последнего дня и требует ненулевых еды и энергии, поэтому
+  // старого «на день меньше» больше недостаточно.
   return {
-    food: (rescue - 1) * total + 6,
-    // энергии теперь тоже «на день меньше, чем нужно всем»: запас в днях
-    // выровнен с едой, иначе энергия никогда не была узким местом
-    energy: energy * (rescue - 1) + 4,
+    food: rescue * total + 6,
+    energy: energy * rescue + 4,
     meds: 2 + Math.ceil(total / 3),
   };
 }
@@ -505,7 +528,6 @@ function checkEnd(room) {
   const alive = alivePlayers(room);
   if (!alive.length) return 'none';
   if (alive.length < room.crewMin) return 'none';
-  if (room.day >= room.rescueDay) return 'survived';
   return null;
 }
 
@@ -801,6 +823,32 @@ function resolveVote(room) {
   resolveCrisis(room);
 }
 
+// Конец дня: смерть от кризиса уже случилась. Спасение приходит только
+// после последнего голосования и только если еда и энергия не на нуле —
+// иначе сигнал не уходит и бункер молчит.
+function finishDay(room) {
+  if (room.state === 'end') return;
+  const alive = alivePlayers(room);
+  if (!alive.length || alive.length < room.crewMin) {
+    finishGame(room, 'none');
+    return;
+  }
+  if (room.day >= room.rescueDay) {
+    if (room.resources.food > 0 && room.resources.energy > 0) {
+      finishGame(room, 'survived');
+    } else {
+      system(
+        room,
+        'Спасение не пришло: на последнем переходе еда или энергия на нуле. Сигнал не уходит.',
+        'bad',
+      );
+      finishGame(room, 'none');
+    }
+    return;
+  }
+  beginDay(room);
+}
+
 // Кризис: если еда или энергия на нуле, бункер теряет одного. Медикаменты
 // могут прикрыть один такой переход к утру.
 function resolveCrisis(room) {
@@ -826,12 +874,7 @@ function resolveCrisis(room) {
     }
   }
 
-  const winner = checkEnd(room);
-  if (winner) {
-    finishGame(room, winner);
-    return;
-  }
-  beginDay(room);
+  finishDay(room);
 }
 
 // Совместимость: комнаты, сохранённые в базе со старой фазой «ночь».
@@ -856,9 +899,7 @@ function resolveLegacyNight(room) {
     }
   }
   room.night = null;
-  const winner = checkEnd(room);
-  if (winner) finishGame(room, winner);
-  else beginDay(room);
+  finishDay(room);
 }
 
 function startGame(room, playerId, options = {}) {
@@ -1333,8 +1374,10 @@ function kickPlayer(code, hostId, targetId) {
 // Спецвозможности. Одна на партию, только днём, с явным подтверждением:
 // supply — сразу, swap/peek — через выбор карты и игрока.
 function applySpecialSupply(room, player, special) {
+  const total = room.players.filter((item) => !item.left).length;
+  const supply = specialSupply(total);
   const parts = [];
-  for (const [key, amount] of Object.entries(special.supply || {})) {
+  for (const [key, amount] of Object.entries(supply)) {
     if (!amount) continue;
     room.resources[key] = round1((room.resources[key] || 0) + amount);
     parts.push(`${RESOURCE_LABEL[key]} +${amount}`);
@@ -1522,6 +1565,13 @@ function discussionHints(room, spokenToday) {
   if (room.resources.meds <= 1) {
     hints.push('Медикаментов почти нет — кризис прикрыть больше нечем.');
   }
+  if (daysLeft <= 1) {
+    hints.push(
+      room.resources.food <= 0 || room.resources.energy <= 0
+        ? 'Спасение придёт после голосования, но с нулевыми запасами сигнал не уходит.'
+        : 'Спасение придёт после голосования — еда и энергия должны остаться выше нуля.',
+    );
+  }
 
   return hints.slice(0, 3);
 }
@@ -1575,6 +1625,8 @@ function serializeFor(room, viewer) {
       .map((message) => message.authorId),
   );
 
+  const knownCost =
+    room.state === 'vote' ? costFor(alive.filter((player) => player.alive), true) : null;
   const players = room.players.map((player) => {
     const revealedTraits = isEnd
       ? player.traits
@@ -1615,6 +1667,21 @@ function serializeFor(room, viewer) {
       revealedThisRound: Boolean(player.revealedThisRound),
       votedFor: room.state === 'vote' && room.votes[player.id] ? room.votes[player.id] : null,
       votesAgainst: votesAgainst[player.id] || 0,
+      // Что будет с суточным расходом, если изгнать этого игрока. Считаем
+      // только по раскрытым картам, чтобы не выдавать скрытые эффекты.
+      leaveCost:
+        room.state === 'vote' && player.alive && knownCost
+          ? (() => {
+              const without = costFor(
+                alive.filter((item) => item.id !== player.id),
+                true,
+              );
+              return {
+                food: round1(without.food - knownCost.food),
+                energy: round1(without.energy - knownCost.energy),
+              };
+            })()
+          : null,
     };
   });
 
@@ -1626,7 +1693,10 @@ function serializeFor(room, viewer) {
     effect: playerEffectText(trait),
     desc:
       trait.cat === 'special'
-        ? specialInfo(trait.value)?.desc || ''
+        ? specialDescription(
+            specialInfo(trait.value),
+            room.players.filter((item) => !item.left).length,
+          )
         : '',
   }));
   const me = {
@@ -1662,7 +1732,7 @@ function serializeFor(room, viewer) {
       return {
         kind: special.kind,
         label: special.label,
-        desc: special.desc,
+        desc: specialDescription(special, room.players.filter((item) => !item.left).length),
         used: Boolean(viewer.abilityUsed),
         available: Boolean(
           viewer.alive && !viewer.abilityUsed && ABILITY_PHASES.includes(room.state),
