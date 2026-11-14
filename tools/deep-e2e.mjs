@@ -218,7 +218,16 @@ async function main() {
     "чат: поле очистилось",
   );
 
-  // кнопка отправки: серая на пустом поле, красная при вводе
+  // кнопка отправки: нейтральная на пустом поле, цветная при вводе;
+  // оттенок берём из темы, чтобы редизайн не ломал проверку поведения.
+  const accentRgb = await evaluate(`(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent)";
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  })()`);
   const sendIdle = await evaluate(
     'getComputedStyle(document.querySelector(".send-btn")).backgroundColor',
   );
@@ -238,8 +247,8 @@ async function main() {
     return 1;
   })()`);
   note(
-    sendIdle !== "rgb(255, 53, 0)" && sendTyped === "rgb(255, 53, 0)",
-    `кнопка чата: покой ${sendIdle}, ввод ${sendTyped}`,
+    sendIdle !== accentRgb && sendTyped === accentRgb,
+    `кнопка чата: покой ${sendIdle}, ввод ${sendTyped}, акцент ${accentRgb}`,
   );
 
   // модалки: остались только правила (досье убрано вместе с ролями)

@@ -55,8 +55,12 @@ const AVATARS: string[] = require("./src/content.js").AVATARS;
 // забыли: браузер с Cloudflare держали старый CSS, и новая разметка разъехалась.
 const STYLE_VER = (() => {
   try {
-    const text = require("node:fs").readFileSync(`${PUBLIC}/style.css`, "utf8");
-    return Bun.hash(text).toString(36).slice(0, 8);
+    const fs = require("node:fs");
+    const base = fs.readFileSync(`${PUBLIC}/style.css`, "utf8");
+    const redesign = fs.readFileSync(`${PUBLIC}/redesign.css`, "utf8");
+    return Bun.hash(base + redesign)
+      .toString(36)
+      .slice(0, 8);
   } catch {
     return "6";
   }
@@ -990,50 +994,80 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <header class="landing-top">
-  <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
-  <span class="landing-top-note">бесплатная браузерная игра · без установки</span>
+  <a class="landing-brand" href="/" aria-label="БУНКЕР·9 — на главную">
+    <span class="brand-emblem" aria-hidden="true">9</span>
+    <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
+  </a>
+  <div class="landing-top-right">
+    <span class="landing-status"><i></i>КАНАЛ 09 ОТКРЫТ</span>
+    <span class="landing-top-note">бесплатно · в браузере · без установки</span>
+  </div>
 </header>
 <main class="landing-main">
-  <section class="landing-hero">
-    <div class="hero-tags">
-      <span class="tag">5–15 игроков</span>
-      <span class="tag">день за днём</span>
-      <span class="tag">≈20 минут</span>
+  <section class="landing-hero" aria-labelledby="heroTitle">
+    <div class="hero-airlock" aria-hidden="true">
+      <div class="airlock-ring airlock-ring-outer"></div>
+      <div class="airlock-ring airlock-ring-mid"></div>
+      <div class="airlock-ring airlock-ring-inner"></div>
+      <div class="airlock-scan"></div>
+      <div class="airlock-core"><span>09</span><small>ГЕРМОЗАТВОР</small></div>
+      <i class="airlock-tick tick-1"></i><i class="airlock-tick tick-2"></i>
+      <i class="airlock-tick tick-3"></i><i class="airlock-tick tick-4"></i>
     </div>
-    <h1 class="hero-title">БУНКЕР<span class="accent">·9</span></h1>
-    <p class="hero-lead">Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь. Мест меньше, чем людей, еды меньше, чем нужно, и каждый день кто-то лишний.</p>
+    <div class="hero-copy">
+      <div class="hero-kicker"><span>СОЦИАЛЬНАЯ ДЕДУКЦИЯ</span><i></i><b>ПРОТОКОЛ 09</b></div>
+      <h1 class="hero-title" id="heroTitle">БУНКЕР<span class="accent">·9</span></h1>
+      <p class="hero-signal">СИГНАЛ <span>ТИШИНЫ</span></p>
+      <p class="hero-lead">Снаружи мир замолчал. Внутри — один запас еды, восемь личных карт и люди, которым вы пока решаете доверять. <strong>Но мест хватит не всем.</strong></p>
+    </div>
+    <div class="hero-bottom">
+      <div class="hero-stats" aria-label="Кратко об игре">
+        <div><b>5—15</b><span>выживших</span></div>
+        <div><b>08</b><span>личных карт</span></div>
+        <div><b>≈20</b><span>минут на партию</span></div>
+      </div>
+      <a class="hero-jump" href="#access">ВОЙТИ В БУНКЕР <span aria-hidden="true">↘</span></a>
+    </div>
   </section>
 
-  <section class="landing-forms">
-    <form method="post" action="/act/create" class="landing-card">
-      <span class="eyebrow">СОЗДАТЬ ИГРУ</span>
-      <h2>Открыть бункер</h2>
+  <section class="landing-forms" id="access" aria-label="Терминал доступа">
+    <div class="access-head"><span><i></i>ТЕРМИНАЛ ДОСТУПА</span><b>БУНКЕР / 09</b></div>
+    <form method="post" action="/act/create" class="landing-card create-card">
+      <div class="form-heading"><span class="eyebrow">01 / НОВАЯ СМЕНА</span><span class="form-index">01</span></div>
+      <h2>Откройте свой бункер</h2>
+      <p class="form-lead">Придумайте позывной и позовите друзей.</p>
       ${problem ? `<p class="toast">${problem}</p>` : ""}
-      <label class="field">Позывной
+      <label class="field">Ваш позывной
         <input name="name" maxlength="16" required placeholder="Например, Ворон" value="${name}">
       </label>
-      <fieldset class="avatars">${avatars}</fieldset>
-      <button class="btn btn-primary btn-wide" type="submit">Создать игру</button>
+      <fieldset class="avatars" aria-label="Выберите аватар">${avatars}</fieldset>
+      <button class="btn btn-primary btn-wide" type="submit"><span>Создать игру</span><span class="btn-arrow" aria-hidden="true">↗</span></button>
     </form>
 
-    <form method="post" action="/act/join" class="landing-card">
-      <span class="eyebrow">ПОДКЛЮЧИТЬСЯ</span>
-      <h2>Войти по коду</h2>
-      <label class="field">Код комнаты
-        <input name="code" maxlength="4" required placeholder="КОД" class="code-input" value="${code}">
-      </label>
-      <label class="field">Позывной
-        <input name="name" maxlength="16" required placeholder="Позывной" value="${name}">
-      </label>
+    <div class="access-divider"><span></span><b>ИЛИ</b><span></span></div>
+
+    <form method="post" action="/act/join" class="landing-card join-card">
+      <div class="form-heading"><span class="eyebrow">02 / ПОДКЛЮЧЕНИЕ</span><span class="form-index">02</span></div>
+      <h2>У вас есть код?</h2>
+      <div class="join-fields">
+        <label class="field">Код комнаты
+          <input name="code" maxlength="4" required placeholder="КОД" class="code-input" value="${code}">
+        </label>
+        <label class="field">Ваш позывной
+          <input name="name" maxlength="16" required placeholder="Например, Лиса" value="${name}">
+        </label>
+      </div>
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
-      <button class="btn btn-secondary btn-wide" type="submit">Подключиться</button>
+      <button class="btn btn-secondary btn-wide" type="submit"><span>Подключиться к смене</span><span class="btn-arrow" aria-hidden="true">→</span></button>
     </form>
+    <p class="access-footnote"><span>↳</span> Ссылка на комнату появится после создания. Аккаунт не нужен.</p>
   </section>
-
-</main></body></html>`;
+</main>
+<footer class="landing-footer"><span>БУНКЕР·9 / СИГНАЛ ТИШИНЫ</span><span>ДОВЕРЯЙТЕ. ПРОВЕРЯЙТЕ. ВЫЖИВАЙТЕ.</span></footer></body></html>`;
 }
 
 function appHtml(snapshot: any, origin: string, tab = "day"): string {
@@ -1050,6 +1084,7 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
 </head><body class="game">
@@ -1400,6 +1435,7 @@ Bun.serve({
 
     for (const name of [
       "/style.css",
+      "/redesign.css",
       "/sound.js",
       "/favicon.svg",
       "/favicon-32.png",

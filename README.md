@@ -60,6 +60,14 @@
 
 ## Скриншоты
 
+Все кадры ниже — актуальная визуальная редакция 2.0. Переснять их одной
+командой (без `SITE` поднимется временный локальный сервер):
+
+```bash
+bun run shots
+# только главная: ONLY=landing bun run shots
+```
+
 | Лобби                                          | Сценарий                                     |
 | ---------------------------------------------- | -------------------------------------------- |
 | ![Лобби](screenshots/02-lobby.png)             | ![Сценарий](screenshots/03-scenario.png)     |
@@ -224,8 +232,9 @@
 - поле ввода закреплено над вкладками, высота учитывает `visualViewport` и
   клавиатуру.
 
-Вся мобильная раскладка — один `@media (max-width: 780px)` в конце
-`public/style.css`; десктопная версия не меняется.
+Базовая мобильная раскладка — `@media (max-width: 780px)` в конце
+`public/style.css`; адаптивная тема и состояния движения дополняют её в
+`public/redesign.css`.
 
 ## Технологии
 
@@ -245,6 +254,9 @@ flowchart LR
 - **SSE-сжатие** — zstd, фолбэк brotli, `identity` по `Accept-Encoding`.
   Cloudflare срезает zstd, поэтому через прод обычно уходит brotli.
 - **Синтез звука** — WebAudio в `public/sound.js`, без аудиофайлов.
+- **Визуальная редакция 2.0** — `public/redesign.css`: тёмная индустриальная
+  палитра, анимированный гермозатвор, отзывчивые карточки и входные анимации.
+  Анимации уважают `prefers-reduced-motion`, внешних JS-библиотек нет.
 - **Никаких npm-зависимостей в рантайме.**
 
 ## Запуск
@@ -363,7 +375,7 @@ src/render.ts        состояние → HTML (патчи по id для Data
 src/store.ts         bun:sqlite: rooms, sessions, games; отложенная запись
 src/ai.ts            OpenAI-совместимый клиент, пять генераторов, mock
 src/content.js       карты, эффекты, спецвозможности, события, сценарии
-public/              style.css, sound.js, vendor/datastar-1.0.5.js
+public/              style.css + redesign.css, sound.js, vendor/datastar-1.0.5.js
 tools/               e2e-проверки, balance-sim, снимки UI
 test/sim-bun.mjs     боты по HTTP/SSE
 deploy/              smoke, туннель, vps/ (bootstrap, deploy, systemd, Caddy)
