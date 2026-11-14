@@ -147,7 +147,10 @@ try {
 
   // ---- 1. таймер ----
   await evaluate("document.querySelector('#board .lobby-start .btn-primary')?.click()");
-  await sleep(1500);
+  await sleep(1200);
+  // Сценарий без таймера: хост открывает первый день вручную.
+  await evaluate('document.querySelector(".intro-start")?.click()');
+  await sleep(1200);
   const timerValue = async () =>
     Number(
       (await text('(document.querySelector(".phase-timer")||{}).textContent')).replace(

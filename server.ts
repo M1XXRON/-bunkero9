@@ -276,7 +276,7 @@ function phaseLabel(snapshot: any): string {
   const day = snapshot.day;
   switch (snapshot.state) {
     case "intro":
-      return "СМЕНА СОБРАНА";
+      return "СЦЕНАРИЙ ПАРТИИ";
     case "reveal":
       return `ДЕНЬ ${day} · РАСКРЫТИЕ КАРТ`;
     case "discussion":
@@ -885,6 +885,10 @@ async function handleAction(
     }
     case "pace": {
       const result = engine.setPace(session.room, playerId, payload.pace);
+      return result?.ok === false ? fail(session, result.error) : done();
+    }
+    case "ready": {
+      const result = engine.markReady(session.room, playerId);
       return result?.ok === false ? fail(session, result.error) : done();
     }
     case "reveal": {

@@ -52,19 +52,26 @@ note(startRes.status === 204, `старт игры → ${startRes.status}`);
 // ---------- таймер: значение приходит с сервера и меняется по фазам ----------
 const endsAt = async (sid) =>
   Number(((await page(sid)).match(/data-signals="\{endsAt: (\d+)/) || [])[1] || 0);
+const introPhase = await phaseOf(H);
 const t1 = await endsAt(H);
-if ((await phaseOf(H)) === "ПРОБУЖДЕНИЕ") {
-  note(t1 > 0, `таймер: endsAt в разметке (${t1})`);
-  await post(H, "skip");
-  await sleep(1200);
-  const t2 = await endsAt(H);
-  note(t2 > 0 && Math.abs(t2 - t1) > 500, `таймер: endsAt меняется по фазам (${t1} → ${t2})`);
-  const html = await page(H);
-  note(!/__ifmissing/.test(html), "таймер: без data-signals__ifmissing (иначе замирает на 0с)");
-  note(/confirm\('Выйти из бункера/.test(html), "выход: в партии есть подтверждение");
-} else {
-  console.log("  · фаза уже не ПРОБУЖДЕНИЕ — проверку таймера пропускаю");
-}
+note(introPhase === "СЦЕНАРИЙ", `сценарий открыт (${introPhase})`);
+note(t1 === 0, `сценарий: без таймера (endsAt=${t1})`);
+const introHtml = await page(H);
+note(/intro-hero/.test(introHtml), "сценарий: красочный экран с героем");
+await post(sids[0], "ready");
+await sleep(300);
+note(/1 \/ 5 прочитали/.test(await page(H)), "сценарий: отметка «Я прочитал» видна всем");
+await post(H, "skip");
+await sleep(1200);
+const revealPhase = await phaseOf(H);
+const t2 = await endsAt(H);
+note(revealPhase === "РАССВЕТ", `после сценария начался день (${revealPhase})`);
+note(t2 > 0, `таймер: endsAt в разметке (${t2})`);
+note(
+  !/__ifmissing/.test(await page(H)),
+  "таймер: без data-signals__ifmissing (иначе замирает на 0с)",
+);
+note(/confirm\('Выйти из бункера/.test(await page(H)), "выход: в партии есть подтверждение");
 
 // ---------- после голосования сразу новый день, фазы «ночь» нет ----------
 let sawNight = false;

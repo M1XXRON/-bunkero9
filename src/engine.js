@@ -370,9 +370,12 @@ function startPhase(room, phase, duration, timeoutFn) {
   room.phaseToken += 1;
   room.state = phase;
   room.phaseStartedAt = Date.now();
-  room.phaseEndsAt = Date.now() + duration;
-  room.timeoutFn = timeoutFn;
-  armTimer(room, duration);
+  // duration=null — фаза без таймера: сценарий читают, пока не нажмут «Я прочитал»
+  // или хост не откроет первый день.
+  room.phaseEndsAt = duration == null ? null : Date.now() + duration;
+  room.timeoutFn = duration == null ? null : timeoutFn;
+  if (duration == null) room.timer = null;
+  else armTimer(room, duration);
 }
 
 function accelerate(room, ms) {
@@ -386,7 +389,6 @@ function accelerate(room, ms) {
 // Восстановление комнаты из базы: таймер и timeoutFn не сериализуются,
 // поэтому по текущей фазе заново выбираем функцию продолжения.
 const PHASE_TIMEOUTS = {
-  intro: (room) => beginDay(room),
   reveal: (room) => revealTimeout(room),
   discussion: (room) => startVote(room),
   vote: (room) => resolveVote(room),
@@ -404,6 +406,15 @@ function resumeRoom(room) {
     disconnectedAt: player.isBot ? null : (player.disconnectedAt ?? Date.now()),
   }));
   if (room.state === 'lobby' || room.state === 'end') return room;
+  // Сценарий открыт без таймера: после рестарта ждём «Я прочитал» или хоста,
+  // а не досчитываем старый таймер.
+  if (room.state === 'intro') {
+    room.readyIds = Array.isArray(room.readyIds) ? room.readyIds : [];
+    room.phaseEndsAt = null;
+    room.timeoutFn = null;
+    room.phaseStartedAt = room.phaseStartedAt || Date.now();
+    return room;
+  }
   // Комнаты из базы со старой фазой «ночь»: ночи больше нет, сразу утро.
   if (room.state === 'night') {
     room.state = 'discussion';
@@ -836,6 +847,7 @@ function startGame(room, playerId, options = {}) {
   room.votes = {};
   room.night = null;
   room.ability = null;
+  room.readyIds = [];
   room.lastHealTarget = null;
   room.winner = null;
   room.phaseEndsAt = null;
@@ -891,8 +903,25 @@ function startGame(room, playerId, options = {}) {
     `Смена: ${total} человек. Спасение — через ${room.rescueDay} дней. Бункер выдержит, только если в нём останется хотя бы ${room.crewMin}.`,
     'warn',
   );
-  startPhase(room, 'intro', phaseMs(room, 'intro'), () => beginDay(room));
+  room.readyIds = room.players.filter((player) => player.isBot).map((player) => player.id);
+  startPhase(room, 'intro', null, null);
   changed(room);
+  return { ok: true };
+}
+
+// «Я прочитал»: сценарий открыт без таймера, день начинается, когда прочитали
+// все (боты отмечаются сразу) или когда хост нажал «Начать день».
+function markReady(code, playerId) {
+  const room = rooms.get(normalizeCode(code));
+  if (!room) return { ok: false, error: 'Бункер не найден.' };
+  if (room.state !== 'intro') return { ok: false, error: 'Сценарий уже закрыт.' };
+  const player = playerById(room, playerId);
+  if (!player || !player.alive) return { ok: false, error: 'Вы не участвуете.' };
+  room.readyIds = Array.isArray(room.readyIds) ? room.readyIds : [];
+  if (!room.readyIds.includes(player.id)) room.readyIds.push(player.id);
+  const total = room.players.filter((item) => !item.left).length;
+  if (room.readyIds.length >= total) beginDay(room);
+  else changed(room);
   return { ok: true };
 }
 
@@ -918,6 +947,7 @@ function createRoom({ name, avatar, socketId }) {
     votes: {},
     night: null,
     ability: null,
+    readyIds: [],
     lastHealTarget: null,
     winner: null,
     phaseEndsAt: null,
@@ -1225,6 +1255,7 @@ function rematch(code, playerId) {
   room.votes = {};
   room.night = null;
   room.ability = null;
+  room.readyIds = [];
   room.lastHealTarget = null;
   room.winner = null;
   room.phaseEndsAt = null;
@@ -1645,6 +1676,13 @@ function serializeFor(room, viewer) {
     totalCount: room.players.length,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
+    ready: {
+      me: Boolean((room.readyIds || []).includes(viewer.id)),
+      count: room.players.filter(
+        (item) => !item.left && (room.readyIds || []).includes(item.id),
+      ).length,
+      total: room.players.filter((item) => !item.left).length,
+    },
     now: Date.now(),
   };
 }
@@ -1713,6 +1751,7 @@ module.exports = {
   supplyOf,
   castVote,
   useAbility,
+  markReady,
   sendChat,
   rematch,
   setPace,

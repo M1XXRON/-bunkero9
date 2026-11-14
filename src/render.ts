@@ -74,6 +74,8 @@ export type Snapshot = {
   event: { title: string; text: string; food: number; energy: number; meds: number } | null;
   settings: { pace: string };
   aliveCount: number;
+  totalCount: number;
+  ready: { me: boolean; count: number; total: number };
   minPlayers: number;
   maxPlayers: number;
   phaseEndsAt: number | null;
@@ -122,7 +124,7 @@ const esc = (value: unknown) =>
 
 const PHASE_CHIP: Record<string, string> = {
   lobby: "ЛОББИ",
-  intro: "ПРОБУЖДЕНИЕ",
+  intro: "СЦЕНАРИЙ",
   reveal: "РАССВЕТ",
   discussion: "ОБСУЖДЕНИЕ",
   vote: "ГОЛОСОВАНИЕ",
@@ -194,7 +196,7 @@ function topbar(snap: Snapshot, origin: string): string {
     <div class="topbar-center">
       <span class="phase-chip tone-${tone}">${esc(PHASE_CHIP[snap.state] || "")}</span>
       ${
-        snap.state !== "lobby"
+        snap.state !== "lobby" && snap.state !== "intro"
           ? `<span class="phase-day">день ${snap.day}${snap.daysLeft !== null ? ` · до спасения ${snap.daysLeft}` : ""}</span>`
           : ""
       }
@@ -469,6 +471,67 @@ function turnStrip(snap: Snapshot): string {
       <span class="seat-count">${turn.index} / ${turn.total}</span>
     </div>
     <div class="turn-chips">${chips}</div>
+  </div>`;
+}
+
+function introHero(snap: Snapshot): string {
+  const story = snap.story;
+  const ready = snap.ready || { me: false, count: 0, total: snap.totalCount };
+  const pct = ready.total ? Math.round((ready.count / ready.total) * 100) : 0;
+  const res = snap.resources;
+  const readyButton = ready.me
+    ? '<button class="btn btn-secondary intro-ready" disabled>Вы прочитали</button>'
+    : `<button class="btn btn-secondary intro-ready" data-on:click="@post('/act/ready', {retry: 'never'})">Я прочитал</button>`;
+  const hostButton = snap.me.isHost
+    ? `<button class="btn btn-primary intro-start" data-on:click="@post('/act/skip', {retry: 'never'})">Начать день</button>`
+    : `<span class="intro-wait">Ждём хоста: он откроет первый день.</span>`;
+  const sparks = "<i></i>".repeat(14);
+  return `<div class="intro-hero">
+    <div class="intro-visual" aria-hidden="true">
+      <div class="intro-glow"></div>
+      <div class="intro-rings"><i></i><i></i><i></i></div>
+      <svg class="intro-door" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+        <circle cx="100" cy="100" r="86" stroke="currentColor" stroke-width="1.5" opacity=".5"/>
+        <circle cx="100" cy="100" r="70" stroke="currentColor" stroke-width="3"/>
+        <circle cx="100" cy="100" r="58" stroke="currentColor" stroke-width="1.5" opacity=".7"/>
+        <path d="M100 30v140M30 100h140" stroke="currentColor" stroke-width="2" opacity=".8"/>
+        <path d="M54 54l92 92M146 54l-92 92" stroke="currentColor" stroke-width="1.2" opacity=".4"/>
+        <circle cx="100" cy="100" r="14" stroke="currentColor" stroke-width="2"/>
+        <circle cx="100" cy="100" r="5" fill="currentColor"/>
+        <circle cx="100" cy="18" r="3.5" fill="currentColor"/>
+        <circle cx="182" cy="100" r="3.5" fill="currentColor"/>
+        <circle cx="100" cy="182" r="3.5" fill="currentColor"/>
+        <circle cx="18" cy="100" r="3.5" fill="currentColor"/>
+      </svg>
+      <div class="intro-sparks">${sparks}</div>
+      <div class="intro-visual-label">КОЛЬЦО-9<span>гермодверь закрыта</span></div>
+    </div>
+
+    <div class="intro-copy">
+      <span class="intro-kicker">СИГНАЛ ТИШИНЫ · СЦЕНАРИЙ ПАРТИИ</span>
+      <h1 class="intro-title">${esc(story?.title || "Смена собрана")}</h1>
+      <p class="intro-premise">${esc(story?.premise || "Семнадцать дней назад мир замолчал. Вы — последние, кто успел закрыть за собой гермодверь.")}</p>
+      ${
+        story?.threat
+          ? `<div class="intro-threat"><span>ЧТО НАСТОРАЖИВАЕТ</span><b>${esc(story.threat)}</b></div>`
+          : ""
+      }
+      <div class="intro-stats">
+        <div><b>${snap.totalCount}</b><span>человек в смене</span></div>
+        <div><b>${snap.rescueDay ?? "?"}</b><span>дней до спасения</span></div>
+        <div><b>${snap.crewMin}</b><span>минимум смены</span></div>
+        <div class="intro-res">
+          <span><b>${res.food}</b> еда</span>
+          <span><b>${res.energy}</b> энергия</span>
+          <span><b>${res.meds}</b> медицина</span>
+        </div>
+      </div>
+      <div class="intro-read">
+        <div class="intro-meter"><i style="width: ${pct}%"></i></div>
+        <span class="intro-read-count">${ready.count} / ${ready.total} прочитали</span>
+      </div>
+      <div class="intro-actions">${readyButton}${hostButton}</div>
+    </div>
   </div>`;
 }
 
@@ -758,24 +821,14 @@ function discussionScene(snap: Snapshot): string {
 
 function scene(snap: Snapshot): string {
   const byState: Record<string, () => string> = {
-    intro: () => `<div class="action-block">
-        <span class="eyebrow">КАТАСТРОФА</span>
-        <h3>${esc(snap.story?.title || "Смена собрана")}</h3>
-        <p>${esc(snap.story?.premise || "Семнадцать дней назад мир замолчал.")}</p>
-        ${
-          snap.story?.threat
-            ? `<div class="story-threat"><span>ЧТО НАСТОРАЖИВАЕТ</span>${esc(snap.story.threat)}</div>`
-            : ""
-        }
-        <p class="note">Смена собрана. Спасение через ${snap.rescueDay ?? "?"} дней — до тех пор нужно держать ресурсы и людей.</p>
-      </div>`,
+    intro: () => introHero(snap),
     reveal: () => revealScene(snap),
     discussion: () => discussionScene(snap),
     vote: () => voteScene(snap),
     end: () => endScene(snap),
   };
   const titles: Record<string, string> = {
-    intro: "Смена собрана",
+    intro: "Сценарий",
     reveal: "Раскрытие карт",
     discussion: "Обсуждение",
     vote: "Голосование",
@@ -794,15 +847,21 @@ function scene(snap: Snapshot): string {
           data-text="$simple ? 'сводка' : 'простой вид'">простой вид</button>`
       : "";
   const headActions = `<div class="head-actions">${viewToggle}${host}</div>`;
-  return `
-    <section class="panel scene-panel">
-      <header class="panel-head">
+  // Сценарий — самостоятельный экран: заголовок панели и кнопка пропуска
+  // дублировали бы герой и его кнопки.
+  const head =
+    snap.state === "intro"
+      ? ""
+      : `<header class="panel-head">
         <div>
           <span class="eyebrow">${snap.day ? `ДЕНЬ ${snap.day}` : "ПАРТИЯ"}</span>
           <h2>${esc(titles[snap.state] || "Ход партии")}</h2>
         </div>
         ${headActions}
-      </header>
+      </header>`;
+  return `
+    <section class="panel scene-panel${snap.state === "intro" ? " intro-panel" : ""}">
+      ${head}
       ${abilityPanel(snap)}
       ${eventCard(snap)}
       ${body}
@@ -935,6 +994,7 @@ function rules(snap: Snapshot): string {
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
         <div class="modal-section">
           <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня — спасаются все, кто к тому моменту жив.</p>
+          <p><b>Сценарий.</b> Партия начинается без таймера: прочитайте катастрофу и нажмите «Я прочитал». Когда прочитают все (или хост откроет день), начнётся раскрытие.</p>
           <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
           <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
           <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+6 еды, +4 энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
@@ -1051,7 +1111,7 @@ export function renderTitle(snap: Snapshot): string {
   else {
     if (snap.day) parts.push(`день ${snap.day}`);
     const label: Record<string, string> = {
-      intro: "смена собрана",
+      intro: "сценарий",
       reveal: "раскрытие карт",
       discussion: "обсуждение",
       vote: "голосование",

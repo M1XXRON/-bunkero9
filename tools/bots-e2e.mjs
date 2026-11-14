@@ -91,7 +91,9 @@ try {
   await post(HOST, "start");
   await sleep(400);
   const startedPhase = await phase(HOST);
-  note(/ПРОБУЖДЕНИЕ|РАССВЕТ/.test(startedPhase), `партия началась (${startedPhase})`);
+  note(/СЦЕНАРИЙ/.test(startedPhase), `партия началась со сценария (${startedPhase})`);
+  await post(HOST, "skip"); // сценарий без таймера — хост открывает день
+  await sleep(400);
 
   // ждём, пока боты раскроют карты: партия сама дойдёт минимум до обсуждения
   let feed = "";

@@ -146,7 +146,15 @@ async function main() {
   await evaluate("document.querySelector('#board .lobby-start .btn-primary')?.click()");
   await sleep(1600);
   const startPhase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
-  note(/ПРОБУЖДЕНИЕ|РАССВЕТ/.test(startPhase), `старт: фаза ${startPhase}`);
+  note(/СЦЕНАРИЙ|РАССВЕТ/.test(startPhase), `старт: фаза ${startPhase}`);
+  note(
+    await evaluate(
+      '!!document.querySelector(".intro-hero") && !document.querySelector(".phase-timer")',
+    ),
+    "сценарий: герой без таймера",
+  );
+  await evaluate('document.querySelector(".intro-start")?.click()');
+  await sleep(1200);
   note(
     await evaluate('getComputedStyle(document.querySelector(".mtabbar")).display === "none"'),
     "десктоп: мобильные вкладки скрыты",
