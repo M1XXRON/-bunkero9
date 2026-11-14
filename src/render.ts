@@ -126,13 +126,11 @@ const PHASE_CHIP: Record<string, string> = {
   reveal: "РАССВЕТ",
   discussion: "ОБСУЖДЕНИЕ",
   vote: "ГОЛОСОВАНИЕ",
-  night: "НОЧЬ",
   end: "ИТОГ",
 };
 
 const PHASE_TONE: Record<string, string> = {
   vote: "vote",
-  night: "night",
   end: "end",
 };
 
@@ -430,7 +428,11 @@ function ownCards(snap: Snapshot): string {
           : "скрыта";
       return `<div class="own-card ${t.revealed ? "revealed" : ""} ${special ? "special" : ""}">
         <span class="own-cat">${esc(t.label)}</span>
-        <span class="own-value">${esc(t.value)}</span>
+        <span class="own-value">${esc(t.value)}${
+          special && t.desc
+            ? ` <button class="ability-info" data-ability-info="${esc(t.desc)}" aria-label="Что даёт спецвозможность">i</button>`
+            : ""
+        }</span>
         <span class="own-mark">${mark}</span>
         ${t.effect ? `<span class="own-eff">${esc(t.effect)}</span>` : ""}
       </div>`;
@@ -650,26 +652,6 @@ function tally(snap: Snapshot): string {
   return voted ? `<ul class="vote-tally">${voted}</ul>` : "";
 }
 
-// Ночь без ролей: никаких действий — бункер держится на ресурсах.
-function nightScene(snap: Snapshot): string {
-  const res = snap.resources;
-  const starving = res.food <= 0;
-  const cold = res.energy <= 0;
-  const danger = starving || cold;
-  const reasons = [starving ? "еда на нуле" : "", cold ? "энергия на нуле" : ""]
-    .filter(Boolean)
-    .join(" · ");
-  return `<div class="action-block">
-      <h3>${danger ? "Ночь на пределе" : "Свет гаснет"}</h3>
-      <p>${
-        danger
-          ? `Системы не справляются: ${reasons}. Если в запасе есть медикаменты — смена потратит один и обойдётся без потерь. Иначе бункер потеряет одного.`
-          : "Все двери заперты, системы гудят ровно. Ночь переживают молча — до утра никто не выйдет из отсека."
-      }</p>
-      <p class="note">Медикаменты в бункере: <b>${res.meds}</b> · до спасения ${snap.daysLeft ?? "?"} дн.</p>
-    </div>`;
-}
-
 function endScene(snap: Snapshot): string {
   const ending = snap.ending;
   const survived = snap.winner === "survived";
@@ -790,7 +772,6 @@ function scene(snap: Snapshot): string {
     reveal: () => revealScene(snap),
     discussion: () => discussionScene(snap),
     vote: () => voteScene(snap),
-    night: () => nightScene(snap),
     end: () => endScene(snap),
   };
   const titles: Record<string, string> = {
@@ -798,7 +779,6 @@ function scene(snap: Snapshot): string {
     reveal: "Раскрытие карт",
     discussion: "Обсуждение",
     vote: "Голосование",
-    night: "Ночь",
     end: "Протокол завершён",
   };
   const body = (byState[snap.state] || (() => '<p class="note">Ждём начала…</p>'))();
@@ -954,12 +934,12 @@ function rules(snap: Snapshot): string {
         <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
         <div class="modal-section">
-          <p><b>Цель.</b> Дожить до спасения. Оно приходит после ночи последнего дня — спасаются все, кто к тому моменту жив.</p>
+          <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня — спасаются все, кто к тому моменту жив.</p>
           <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
           <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
           <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+6 еды, +4 энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
           <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
-          <p><b>Ночь.</b> Если к утру еда или энергия на нуле, бункер теряет одного. Медикаменты могут прикрыть одну такую ночь.</p>
+          <p><b>Кризис.</b> Отдельной ночи нет: сразу после голосования бункер проверяет запасы. Если еда или энергия на нуле, он теряет одного; медикаменты могут прикрыть один такой переход.</p>
           <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>
         </div>`;
 }
@@ -1009,6 +989,11 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
       ${renderBoard(snap, origin, tab)}
       ${mobileTabbar()}
       <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules(snap)}</dialog>
+      <dialog id="abilityHelp" class="sheet ability-sheet" aria-labelledby="abilityHelpTitle">
+        <button class="modal-close" data-on:click="document.getElementById('abilityHelp').close()" aria-label="Закрыть">×</button>
+        <div class="modal-head"><span class="eyebrow">СПЕЦВОЗМОЖНОСТЬ</span><h2 id="abilityHelpTitle">Что она даёт</h2></div>
+        <div class="modal-section"><p id="abilityHelpBody"></p></div>
+      </dialog>
       <div id="error"></div>
       <div id="peek" class="peek" hidden></div>
     </section>
@@ -1070,7 +1055,6 @@ export function renderTitle(snap: Snapshot): string {
       reveal: "раскрытие карт",
       discussion: "обсуждение",
       vote: "голосование",
-      night: "ночь",
       end: "итог",
     };
     if (label[snap.state]) parts.push(label[snap.state]);

@@ -133,11 +133,8 @@ try {
   const verdict = (await page(H)).match(/recap-verdict">([^<]*)/);
   note(Boolean(verdict && verdict[1].length), "у разбора есть итоговая фраза");
 
-  // эпитафия: mock-модуль отдаёт строку, движок вставляет её вместо сухого текста
   process.env.BUNKER_AI = "mock";
   const ai = await import("../src/ai.ts");
-  const line = await ai.generateEpitaph("Тест (карты: здоровье: астма) — в бункере холод");
-  note(Boolean(line && line.length > 5), `причина ночной потери генерируется («${line}»)`);
   const hintsFromAi = await ai.generateHints("день 2, живых 5");
   note(Array.isArray(hintsFromAi) && hintsFromAi.length >= 2, "модель отдаёт 2–3 наводки");
 } finally {

@@ -110,7 +110,7 @@ const indexOf = (player, cat) => player.traits.findIndex((t) => t.cat === cat);
   note(a.abilityUsed === true, "разведка израсходована");
 }
 
-// ---------- 5. ограничения: ночь, отмена, своя цель ----------
+// ---------- 5. ограничения: не днём, отмена, своя цель ----------
 {
   const r = room(5);
   const a = r.players[0];
@@ -124,10 +124,10 @@ const indexOf = (player, cat) => player.traits.findIndex((t) => t.cat === cat);
   note(r.ability === null, "отмена сбрасывает выбор");
 
   const state = r.state;
-  r.state = "night";
-  const atNight = engine.useAbility(r.code, a.id, { action: "start" });
+  r.state = "end";
+  const atEnd = engine.useAbility(r.code, a.id, { action: "start" });
   r.state = state;
-  note(atNight.ok === false, `ночью нельзя: ${atNight.error}`);
+  note(atEnd.ok === false, `вне дня нельзя: ${atEnd.error}`);
 }
 
 console.log(

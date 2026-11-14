@@ -100,12 +100,9 @@ try {
     await sleep(400);
     feed = await page(HOST);
     reached = ((feed.match(/phase-chip[^>]*>([^<]*)</) || [])[1] || "").trim();
-    if (/ОБСУЖДЕНИЕ|ГОЛОСОВАНИЕ|НОЧЬ|ИТОГ/.test(reached)) break;
+    if (/ОБСУЖДЕНИЕ|ГОЛОСОВАНИЕ|ИТОГ/.test(reached)) break;
   }
-  note(
-    /ОБСУЖДЕНИЕ|ГОЛОСОВАНИЕ|НОЧЬ|ИТОГ/.test(reached),
-    `фазы идут без вмешательства (${reached})`,
-  );
+  note(/ОБСУЖДЕНИЕ|ГОЛОСОВАНИЕ|ИТОГ/.test(reached), `фазы идут без вмешательства (${reached})`);
   const reveals = (feed.match(/chat-reveal/g) || []).length;
   note(reveals >= 8, `боты раскрывают карты (${reveals} сообщений)`);
 
@@ -122,25 +119,22 @@ try {
       note(after !== html || !waiting.includes("Ждут"), "боты голосуют сами (лента меняется)");
       break;
     }
-    if (voted.includes("НОЧЬ") || voted.includes("ИТОГ")) break;
+    if (voted.includes("ИТОГ")) break;
   }
   note(!!voted, `фаза голосования достигнута (${voted})`);
 
-  // ночь: заражённые-боты должны сходить, партия не встаёт
-  let night = false;
+  // после голосования кризис разрешается сразу, партия не встаёт
+  let advanced = false;
+  let afterVote = "";
   for (let i = 0; i < 40; i++) {
     await sleep(400);
-    const p = await phase(HOST);
-    if (p.includes("НОЧЬ")) {
-      night = true;
-      await sleep(2500);
-      const after = await phase(HOST);
-      note(after !== "НОЧЬ" || after.includes("НОЧЬ"), `ночь отработала (${p} → ${after})`);
+    afterVote = await phase(HOST);
+    if (/РАССВЕТ|ОБСУЖДЕНИЕ|ИТОГ/.test(afterVote)) {
+      advanced = true;
       break;
     }
-    if (p.includes("ИТОГ")) break;
   }
-  note(night, "партия дошла до ночи");
+  note(advanced, `после голосования партия продолжилась (${afterVote})`);
 
   // хост вышел — партия не должна зависнуть и не должна остаться без человека
   await post(HOST, "leave");

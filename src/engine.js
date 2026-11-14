@@ -174,12 +174,12 @@ const CHAT_COOLDOWN_MS = 350;
 const TEST_PACE = process.env.BUNKER_TEST === '1';
 const PACE = TEST_PACE
   ? {
-      normal: { intro: 700, reveal: 700, discussion: 900, vote: 700, night: 700 },
-      fast: { intro: 700, reveal: 700, discussion: 900, vote: 700, night: 700 },
+      normal: { intro: 700, reveal: 700, discussion: 900, vote: 700 },
+      fast: { intro: 700, reveal: 700, discussion: 900, vote: 700 },
     }
   : {
-      normal: { intro: 20000, reveal: 40000, discussion: 120000, vote: 35000, night: 40000 },
-      fast: { intro: 12000, reveal: 25000, discussion: 60000, vote: 20000, night: 25000 },
+      normal: { intro: 20000, reveal: 40000, discussion: 120000, vote: 35000 },
+      fast: { intro: 12000, reveal: 25000, discussion: 60000, vote: 20000 },
     };
 
 const rooms = new Map();
@@ -390,7 +390,6 @@ const PHASE_TIMEOUTS = {
   reveal: (room) => revealTimeout(room),
   discussion: (room) => startVote(room),
   vote: (room) => resolveVote(room),
-  night: (room) => resolveNight(room),
 };
 
 function resumeRoom(room) {
@@ -405,6 +404,12 @@ function resumeRoom(room) {
     disconnectedAt: player.isBot ? null : (player.disconnectedAt ?? Date.now()),
   }));
   if (room.state === 'lobby' || room.state === 'end') return room;
+  // Комнаты из базы со старой фазой «ночь»: ночи больше нет, сразу утро.
+  if (room.state === 'night') {
+    room.state = 'discussion';
+    resolveLegacyNight(room);
+    return room;
+  }
   // старая комната (до пошагового раскрытия) или сброс после рестарта
   if (room.state === 'reveal' && !room.turn) {
     room.turn = {
@@ -641,7 +646,7 @@ function beginDay(room) {
     system(room, 'Энергия на нуле. Холод пробирается в отсеки.', 'bad');
   }
 
-  // Кризис теперь решается ночью (resolveNight): там же медикаменты.
+  // Кризис разрешается сразу после голосования (resolveCrisis).
   const winner = checkEnd(room);
   if (winner) {
     finishGame(room, winner);
@@ -747,39 +752,16 @@ function resolveVote(room) {
     finishGame(room, winner);
     return;
   }
-  startNight(room);
+  // Отдельной фазы «ночь» больше нет: кризис разрешается сразу после
+  // голосования, а следующий день начинается тем же действием.
+  resolveCrisis(room);
 }
 
-// Ночь: ни ролей, ни действий — бункер доживает до утра и платит за это.
-// Кризис (еда или энергия на нуле) забирает одного, медикаменты могут
-// прикрыть одну такую ночь.
-function startNight(room) {
+// Кризис: если еда или энергия на нуле, бункер теряет одного. Медикаменты
+// могут прикрыть один такой переход к утру.
+function resolveCrisis(room) {
   if (room.state === 'end') return;
-  room.votes = {};
   room.ability = null;
-  const alive = alivePlayers(room);
-  const starving = room.resources.food <= 0;
-  const cold = room.resources.energy <= 0;
-  const fatal = (starving || cold) && room.resources.meds <= 0;
-  // Жертву кризиса выбираем на входе в ночь: за 25–40 секунд фазы сервер
-  // успевает попросить у модели причину, а исход уже предопределён.
-  const victim = fatal && alive.length ? pick(alive) : null;
-  room.night = {
-    crisis: victim
-      ? {
-          victimId: victim.id,
-          reason: starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод',
-          epitaph: null,
-        }
-      : null,
-  };
-  startPhase(room, 'night', phaseMs(room, 'night'), () => resolveNight(room));
-  system(room, `НОЧЬ ${room.day} · Свет гаснет.`, 'phase');
-  changed(room);
-}
-
-function resolveNight(room) {
-  if (room.state !== 'night') return;
   const alive = alivePlayers(room);
   const starving = room.resources.food <= 0;
   const cold = room.resources.energy <= 0;
@@ -787,7 +769,6 @@ function resolveNight(room) {
   if (starving || cold) {
     const reason = starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод';
     if (room.resources.meds > 0) {
-      // медикаменты — не лечение ролей, а буфер: одна тяжёлая ночь без потерь
       room.resources.meds -= 1;
       system(
         room,
@@ -795,18 +776,10 @@ function resolveNight(room) {
         'warn',
       );
     } else if (alive.length) {
-      const planned = room.night?.crisis?.victimId
-        ? playerById(room, room.night.crisis.victimId)
-        : null;
-      const victim = planned && planned.alive ? planned : alive[Math.floor(Math.random() * alive.length)];
-      const epitaph = room.night?.crisis?.epitaph;
-      if (epitaph) system(room, epitaph, 'bad');
-      else system(room, `Ночь на пределе — ${reason}.`, 'bad');
-      // если причина написана отдельной строкой, стандартную не дублируем
-      removePlayer(room, victim, 'crisis', reason, { quiet: Boolean(epitaph) });
+      const victim = pick(alive);
+      system(room, `Ночь на пределе — ${reason}.`, 'bad');
+      removePlayer(room, victim, 'crisis', reason, { quiet: true });
     }
-  } else {
-    system(room, 'Ночь прошла спокойно. Системы держат.', 'good');
   }
 
   const winner = checkEnd(room);
@@ -815,6 +788,33 @@ function resolveNight(room) {
     return;
   }
   beginDay(room);
+}
+
+// Совместимость: комнаты, сохранённые в базе со старой фазой «ночь».
+function resolveLegacyNight(room) {
+  const alive = alivePlayers(room);
+  const starving = room.resources.food <= 0;
+  const cold = room.resources.energy <= 0;
+  if (starving || cold) {
+    const reason = starving && cold ? 'голод и холод' : starving ? 'голод' : 'холод';
+    if (room.resources.meds > 0) {
+      room.resources.meds -= 1;
+      system(room, `Ночь на пределе (${reason}), но медикаменты вытянули всех.`, 'warn');
+    } else if (alive.length) {
+      const planned = room.night?.crisis?.victimId
+        ? playerById(room, room.night.crisis.victimId)
+        : null;
+      const victim = planned && planned.alive ? planned : pick(alive);
+      const epitaph = room.night?.crisis?.epitaph;
+      if (epitaph) system(room, epitaph, 'bad');
+      else system(room, `Ночь на пределе — ${reason}.`, 'bad');
+      removePlayer(room, victim, 'crisis', reason, { quiet: Boolean(epitaph) });
+    }
+  }
+  room.night = null;
+  const winner = checkEnd(room);
+  if (winner) finishGame(room, winner);
+  else beginDay(room);
 }
 
 function startGame(room, playerId, options = {}) {
@@ -1085,7 +1085,8 @@ function skipPhase(code, playerId) {
     return { ok: true };
   }
   if (room.state === 'night') {
-    resolveNight(room);
+    // старая комната из базы: ночи больше нет
+    resolveLegacyNight(room);
     return { ok: true };
   }
   return { ok: false, error: 'Сейчас нечего пропускать.' };
@@ -1455,7 +1456,7 @@ function discussionHints(room, spokenToday) {
   }
 
   if (room.resources.meds <= 1) {
-    hints.push('Медикаментов почти нет — тяжёлую ночь прикрыть больше нечем.');
+    hints.push('Медикаментов почти нет — кризис прикрыть больше нечем.');
   }
 
   return hints.slice(0, 3);

@@ -66,35 +66,21 @@ if ((await phaseOf(H)) === "ПРОБУЖДЕНИЕ") {
   console.log("  · фаза уже не ПРОБУЖДЕНИЕ — проверку таймера пропускаю");
 }
 
-// ---------- ночь: чат закрыт у всех, шёпота больше нет ----------
-let night = false;
+// ---------- после голосования сразу новый день, фазы «ночь» нет ----------
+let sawNight = false;
+let advanced = false;
 for (let i = 0; i < 14; i++) {
-  if ((await phaseOf(H)).includes("НОЧЬ")) {
-    night = true;
+  const phase = await phaseOf(H);
+  if (phase.includes("НОЧЬ")) sawNight = true;
+  if (phase.includes("РАССВЕТ") || phase.includes("ИТОГ")) {
+    advanced = true;
     break;
   }
   await post(H, "skip");
   await sleep(700);
 }
-note(night, `дошли до ночи (${await phaseOf(H)})`);
-if (night) {
-  const all = [H, ...sids];
-  const pages = {};
-  for (const sid of all) pages[sid] = await page(sid);
-  note(
-    all.every((sid) => /id="chatInput"[^>]*disabled/.test(chatOf(pages[sid]))),
-    `ночь: у всех чат закрыт (${all.length})`,
-  );
-  note(
-    all.every((sid) => !/name="channel" value="mafia"/.test(pages[sid])),
-    "ночь: канала «шёпот» больше нет",
-  );
-  const closed = await post(all[0], "chat", { text: "в ночь не пишут", channel: "day" });
-  note(
-    closed.status === 204 && !(await page(all[0])).includes("в ночь не пишут"),
-    "ночь: сообщение не проходит",
-  );
-}
+note(!sawNight, "фазы «ночь» больше нет");
+note(advanced, `после голосования сразу рассвет или финал (${await phaseOf(H)})`);
 
 // ---------- лендинг: ошибки вместо тишины ----------
 const bad = await post("", "join", { code: "ZZZZ", name: "Опечатка", avatar: "🦊" }, true);

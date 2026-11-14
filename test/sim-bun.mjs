@@ -150,7 +150,7 @@ async function main() {
   }
   const final = await readStream(sids[0], 400);
   const finalHtml = (await page(sids[0])) + final;
-  check(/ГОЛОСОВАНИЕ|НОЧЬ|РАСКРЫТИЕ|ПРОТОКОЛ|ПОБЕДА/.test(finalHtml), "фазы сменяются");
+  check(/ГОЛОСОВАНИЕ|РАССВЕТ|РАСКРЫТИЕ|ПРОТОКОЛ|ПОБЕДА/.test(finalHtml), "фазы сменяются");
 
   console.log("");
   if (failures.length) {

@@ -33,7 +33,6 @@ function playOne(n, policy, tag) {
   let guard = 0;
   let crisisDeaths = 0;
   let exiles = 0;
-  let nights = 0;
 
   while (room.state !== "end" && guard < 600) {
     guard += 1;
@@ -62,6 +61,7 @@ function playOne(n, policy, tag) {
     }
     if (room.state === "vote") {
       const voters = alive();
+      const deadBefore = new Set(room.players.filter((p) => !p.alive).map((p) => p.id));
       const daysLeft = room.rescueDay - room.day;
       const foodPerDay = voters.length;
       const mustSlim = policy === "smart" && room.resources.food < daysLeft * foodPerDay;
@@ -83,18 +83,12 @@ function playOne(n, policy, tag) {
           policy === "smart" ? candidates.find((p) => p.id !== voter.id) : pick(others);
         engine.castVote(code, voter.id, target.id);
       }
-      const before = alive().length;
-      engine.skipPhase(code, host.id);
-      if (alive().length < before) exiles += 1;
-      continue;
-    }
-    if (room.state === "night") {
-      nights += 1;
-      const before = alive().length;
-      engine.skipPhase(code, host.id);
-      if (alive().length < before) {
-        const dead = room.players.find((p) => !p.alive && p.death?.cause === "crisis");
-        if (dead) crisisDeaths += 1;
+      engine.skipPhase(code, host.id); // голосование + кризис + следующий день
+      for (const p of room.players) {
+        if (!p.alive && !deadBefore.has(p.id)) {
+          if (p.death?.cause === "crisis") crisisDeaths += 1;
+          else if (p.death?.cause === "exile") exiles += 1;
+        }
       }
       continue;
     }
@@ -107,7 +101,6 @@ function playOne(n, policy, tag) {
     turns: guard,
     crisisDeaths,
     exiles,
-    nights,
     food0: room.resources.food === 0,
     energy0: room.resources.energy === 0,
   };

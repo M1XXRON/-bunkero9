@@ -387,13 +387,13 @@ async function main() {
   }
   note(voted, "голосование: фаза достигнута");
 
-  // ночь (или финал, если партия уже закончилась)
-  let sawNight = false;
+  // после голосования сразу новый день или финал — отдельной ночи нет
+  let sawNextDay = false;
   let finalPhase = "";
   for (let step = 0; step < 8; step++) {
     finalPhase = (await text('(document.querySelector(".phase-chip")||{}).textContent')).trim();
-    if (finalPhase.includes("НОЧЬ") || finalPhase.includes("ИТОГ")) {
-      sawNight = true;
+    if (finalPhase.includes("РАССВЕТ") || finalPhase.includes("ИТОГ")) {
+      sawNextDay = true;
       break;
     }
     await evaluate(
@@ -401,7 +401,7 @@ async function main() {
     );
     await sleep(900);
   }
-  note(sawNight, `ночь или финал достигнуты (${finalPhase || "фаза не найдена"})`);
+  note(sawNextDay, `новый день или финал достигнуты (${finalPhase || "фаза не найдена"})`);
 
   // мобильный вид
   await send("Emulation.setDeviceMetricsOverride", {

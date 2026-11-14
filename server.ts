@@ -34,7 +34,6 @@ const engine = require("./src/engine.js");
 
 import {
   aiEnabled,
-  generateEpitaph,
   generateEvent,
   generateHints,
   generatePersonas,
@@ -284,8 +283,6 @@ function phaseLabel(snapshot: any): string {
       return `ДЕНЬ ${day} · ОБСУЖДЕНИЕ`;
     case "vote":
       return `ДЕНЬ ${day} · ГОЛОСОВАНИЕ`;
-    case "night":
-      return `НОЧЬ ${day} · СВЕТ ГАСНЕТ`;
     case "end":
       return "ПРОТОКОЛ ЗАВЕРШЁН";
     default:
@@ -509,7 +506,7 @@ function broadcast(room: any, origin: string) {
     payload += patchSelector("title", renderTitle(snapshot));
     if (banner)
       payload += patchElement(
-        `<div id="banner" class="phase-banner show" data-tone="${snapshot.state === "night" ? "night" : "day"}">${phaseLabel(snapshot)}</div>`,
+        `<div id="banner" class="phase-banner show" data-tone="day">${phaseLabel(snapshot)}</div>`,
       );
 
     if (payload === session.lastPayload) continue;
@@ -652,28 +649,6 @@ async function aiHints(room: any): Promise<void> {
   }
 }
 
-async function aiEpitaph(room: any): Promise<void> {
-  const crisis = room.night?.crisis;
-  if (!crisis?.victimId) return;
-  const key = `${room.code}:epitaph`;
-  if (aiBusy.has(key)) return;
-  aiBusy.add(key);
-  const victim = room.players.find((player: any) => player.id === crisis.victimId);
-  try {
-    if (!victim) return;
-    const cards = victim.traits.map((trait: any) => `${trait.label}: ${trait.value}`).join("; ");
-    const line = await generateEpitaph(
-      `${victim.name} (карты: ${cards}) — в бункере ${crisis.reason}, медикаментов не осталось`,
-    );
-    if (engine.rooms.get(room.code) !== room) return;
-    if (room.state !== "night" || room.night?.crisis?.victimId !== crisis.victimId) return;
-    room.night.crisis.epitaph = line;
-    saveRoom(room);
-  } finally {
-    aiBusy.delete(key);
-  }
-}
-
 async function aiStory(room: any): Promise<void> {
   const key = `${room.code}:story`;
   if (aiBusy.has(key)) return;
@@ -707,7 +682,7 @@ async function aiNextEvent(room: any): Promise<void> {
       .join(", ");
     const event = await generateEvent(context);
     if (engine.rooms.get(room.code) !== room) return;
-    if (room.state !== "night") return;
+    if (!["discussion", "vote"].includes(room.state)) return;
     room.nextEvent = event || null;
     saveRoom(room);
   } finally {
@@ -731,10 +706,8 @@ function scheduleAi(room: any): void {
     saveRoom(room);
   }
   if (!aiEnabled()) return;
-  if (room.state === "night" && !room.nextEvent) void aiNextEvent(room);
-  // причина ночной потери — пока идёт ночь, жертва уже выбрана движком
-  if (room.state === "night" && room.night?.crisis?.victimId && !room.night.crisis.epitaph)
-    void aiEpitaph(room);
+  // Событие следующего дня готовим заранее — той же ночью больше нет фазы.
+  if (["discussion", "vote"].includes(room.state) && !room.nextEvent) void aiNextEvent(room);
   // подсказки на обсуждении — один вызов на день
   if (room.state === "discussion" && (!room.aiHints || room.aiHints.day !== room.day))
     void aiHints(room);
@@ -1023,7 +996,7 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
   <section class="landing-hero">
     <div class="hero-tags">
       <span class="tag">5–15 игроков</span>
-      <span class="tag">день и ночь</span>
+      <span class="tag">день за днём</span>
       <span class="tag">≈20 минут</span>
     </div>
     <h1 class="hero-title">БУНКЕР<span class="accent">·9</span></h1>
@@ -1084,6 +1057,16 @@ document.addEventListener('click', (e) => {
   if (t instanceof HTMLElement && t.closest('.modal-backdrop') && t.classList.contains('modal-backdrop')) {
     t.style.display = 'none';
   }
+});
+
+// Информация о своей спецвозможности: «i» рядом с картой открывает диалог.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('[data-ability-info]');
+  if (!btn) return;
+  const body = document.getElementById('abilityHelpBody');
+  const dialog = document.getElementById('abilityHelp');
+  if (body) body.textContent = btn.dataset.abilityInfo || '';
+  dialog?.showModal();
 });
 
 // Подсказка «кто что раскрыл» при наведении на выжившего. Содержимое строки

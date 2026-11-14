@@ -1,7 +1,6 @@
 // UI-проверки в реальном браузере (CDP), которые глубокий e2e не покрывает:
 //   1) таймер фазы идёт и переустанавливается при смене фазы;
 //   2) вкладка сама оживает после перезапуска сервера (без F5);
-//   3) чат-панель у заражённого ночью открыта в канал «шёпот».
 //
 //   bun tools/ui-e2e.mjs
 //
@@ -199,29 +198,6 @@ try {
       recovered = true;
   }
   note(recovered, `после рестарта сервера вкладка ожила сама (сообщение бота ${sent.status})`);
-
-  // ---- 3. чат у заражённого ночью ----
-  let sawNight = false;
-  for (let i = 0; i < 12; i++) {
-    if ((await phase()).includes("НОЧЬ")) {
-      sawNight = true;
-      break;
-    }
-    await skip();
-    await sleep(800);
-  }
-  if (sawNight) {
-    const channel = await evaluate(
-      '(document.querySelector(\'input[name="channel"]\')||{}).value || ""',
-    );
-    const disabled = await evaluate('(document.getElementById("chatInput")||{}).disabled ?? true');
-    note(
-      (channel === "mafia" && !disabled) || (channel === "day" && disabled),
-      `ночь: канал «${channel}», поле ${disabled ? "закрыто" : "открыто"}`,
-    );
-  } else {
-    console.log("  · до ночи не дошли — проверку чата пропускаю");
-  }
 
   note(jsErrors.length === 0, `ошибки JS: ${jsErrors.length ? jsErrors.slice(0, 3) : "нет"}`);
 } finally {
