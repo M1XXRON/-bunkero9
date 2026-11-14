@@ -67,12 +67,107 @@ type Session = {
   room: string | null;
   player: string | null;
   stream: ReadableStreamDefaultController<Uint8Array> | null;
+  // Сжатие держится на всё время жизни потока: заголовок Content-Encoding
+  // уже отправлен, переключаться на другой алгоритм посреди ответа нельзя.
+  encoder?: StreamEncoder | null;
   phaseKey: string;
   lastPayload: string;
 };
 
 const sessions = new Map<string, Session>();
 const enc = new TextEncoder();
+
+// ---------- сжатие SSE ----------
+// Datastar получает HTML патчами по несколько килобайт на каждое действие,
+// и по сети они уходят в открытом виде. Сжимаем поток целиком (brotli/zstd
+// стрим с flush после каждого патча), а не отдельные сообщения: невалидных
+// склеенных стримов не бывает, и браузер разжимает всё сам.
+// zstd предпочитаем, brotli — запасной: его понимают все актуальные браузеры.
+const zlib = require("node:zlib") as any;
+
+type StreamEncoder = {
+  kind: "zstd" | "br";
+  write(text: string): void;
+  end(): void;
+};
+
+function pickEncoding(req: Request): "zstd" | "br" | "identity" {
+  const accept = (req.headers.get("accept-encoding") || "").toLowerCase();
+  if (/\bzstd\b/.test(accept) && typeof zlib.createZstdCompress === "function") return "zstd";
+  if (/\bbr\b/.test(accept)) return "br";
+  return "identity";
+}
+
+function openEncoder(
+  kind: "zstd" | "br",
+  session: Session,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+): StreamEncoder | null {
+  let compressor: any;
+  try {
+    compressor =
+      kind === "zstd"
+        ? zlib.createZstdCompress()
+        : zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } });
+  } catch (error) {
+    console.warn(`[sse] ${kind} недоступен:`, (error as Error)?.message);
+    return null;
+  }
+
+  let closed = false;
+  compressor.on("data", (chunk: Uint8Array) => {
+    if (closed) return;
+    try {
+      controller.enqueue(new Uint8Array(chunk));
+    } catch {
+      // Поток закрылся: браузер ушёл или ответ отменён.
+      closed = true;
+      if (session.stream === controller) session.stream = null;
+    }
+  });
+  compressor.on("error", (error: Error) => {
+    console.warn(`[sse] ${kind}:`, error?.message);
+    closed = true;
+  });
+
+  return {
+    kind,
+    write(text: string) {
+      if (closed) return;
+      try {
+        compressor.write(text);
+        // Без flush сжатые байты копятся в буфере и событие «зависает».
+        compressor.flush();
+      } catch (error) {
+        console.warn(`[sse] ${kind} write:`, (error as Error)?.message);
+        closed = true;
+      }
+    },
+    end() {
+      if (closed) return;
+      closed = true;
+      try {
+        compressor.end();
+      } catch {
+        /* уже закрыт */
+      }
+    },
+  };
+}
+
+// Единая точка отправки: обычный enqueue или сжатый поток.
+function sendChunk(session: Session, text: string) {
+  if (!session.stream) return;
+  if (session.encoder) {
+    session.encoder.write(text);
+    return;
+  }
+  try {
+    session.stream.enqueue(enc.encode(text));
+  } catch {
+    session.stream = null;
+  }
+}
 
 function newSid(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -384,7 +479,7 @@ setInterval(() => {
   for (const session of sessions.values()) {
     if (!session.stream) continue;
     try {
-      session.stream.enqueue(enc.encode(": keepalive\n\n"));
+      sendChunk(session, ": keepalive\n\n");
     } catch {
       session.stream = null;
     }
@@ -409,7 +504,7 @@ function broadcast(room: any, origin: string) {
     session.phaseKey = key;
 
     let payload = "";
-    payload += patchElement(renderTopbar(snapshot));
+    payload += patchElement(renderTopbar(snapshot, origin));
     payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
     payload += patchSelector("title", renderTitle(snapshot));
     if (banner)
@@ -419,11 +514,7 @@ function broadcast(room: any, origin: string) {
 
     if (payload === session.lastPayload) continue;
     session.lastPayload = payload;
-    try {
-      session.stream.enqueue(enc.encode(payload));
-    } catch {
-      session.stream = null;
-    }
+    sendChunk(session, payload);
   }
 }
 
@@ -713,11 +804,7 @@ function landingFail(message: string, payload: Record<string, unknown> = {}): Re
 
 function fail(session: Session, message: string): Response {
   if (session.stream) {
-    try {
-      session.stream.enqueue(enc.encode(patchElement(renderError(message))));
-    } catch {
-      /* поток уже закрыт */
-    }
+    sendChunk(session, patchElement(renderError(message)));
   }
   return new Response(null, { status: 204 });
 }
@@ -807,18 +894,14 @@ async function handleAction(
       // разложит карты из content.js — игра начнётся в любом случае.
       let personas: any[] | null = null;
       if (aiEnabled() && room.state === "lobby" && room.hostId === playerId) {
-        // Обычно персонажи готовы заранее. Если генерация ещё идёт — ждём её
-        // не дольше 5 с и стартуем: лучше карты из пула, чем зависшая кнопка.
-        const ready = () =>
+        // Старт не ждёт модель: кнопка «Открыть бункер» должна срабатывать
+        // мгновенно. Если фоновая генерация успела — берём её карты, иначе
+        // движок разложит статичные. Раньше здесь был await до 5 с, и с живым
+        // ИИ клик по старту подвисал на этой пятисекундной гонке.
+        personas =
           room.personas && room.personas.forCount === room.players.length
             ? room.personas.list
             : null;
-        personas = ready();
-        if (!personas) {
-          const job = aiPending.get(`${room.code}:personas`);
-          if (job) await Promise.race([job, sleep(5000)]);
-          personas = ready();
-        }
       }
       // исключение из общего правила: startGame принимает объект комнаты
       const result = engine.startGame(room, playerId, {
@@ -969,7 +1052,6 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
     </form>
   </section>
 
-  <p class="landing-foot">Адрес: ${origin}</p>
 </main></body></html>`;
 }
 
@@ -1119,6 +1201,10 @@ console.log(`  ↑ сессий восстановлено: ${loadSessions().len
 
 Bun.serve({
   port: PORT,
+  // HOST=127.0.0.1 на VPS: наружу выставляет Caddy. Раньше переменная
+  // упоминалась в README и systemd-юните, но не читалась — сервер слушал
+  // все интерфейсы (ss показывал *:3100), и порт был открыт напрямую.
+  hostname: process.env.HOST || "0.0.0.0",
   idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url);
@@ -1162,27 +1248,45 @@ Bun.serve({
         broadcast(data.room, origin);
       }
 
+      const encoding = pickEncoding(req);
+      // cancel() не получает controller: запоминаем свой, чтобы не погасить
+      // поток, который к этому моменту уже переподключился.
+      let ownController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let ownEncoder: StreamEncoder | null = null;
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
+          ownController = controller;
           session.stream = controller;
+          const encoder =
+            encoding === "identity" ? null : openEncoder(encoding, session, controller);
+          ownEncoder = encoder;
+          session.encoder = encoder;
           const snapshot = data.snapshot;
           const key = `${snapshot.gameId}:${snapshot.state}:${snapshot.day}`;
           session.phaseKey = key;
           session.lastPayload = "";
           let payload = "";
-          payload += patchElement(renderTopbar(snapshot));
+          payload += patchElement(renderTopbar(snapshot, origin));
           payload += patchElement(renderBoard(snapshot, origin, sessionTab(session)));
-          controller.enqueue(enc.encode(payload));
+          sendChunk(session, payload);
         },
         cancel() {
-          session.stream = null;
+          // Старый поток мог закрыться уже после открытия нового: не гасим
+          // чужой controller и чужой encoder.
+          if (session.stream === ownController) session.stream = null;
+          if (ownEncoder) {
+            ownEncoder.end();
+            if (session.encoder === ownEncoder) session.encoder = null;
+          }
         },
       });
       return new Response(stream, {
         headers: {
           "content-type": "text/event-stream",
-          "cache-control": "no-cache",
+          "cache-control": "no-cache, no-transform",
           connection: "keep-alive",
+          vary: "accept-encoding",
+          ...(encoding === "identity" ? {} : { "content-encoding": encoding }),
         },
       });
     }

@@ -1427,20 +1427,36 @@ button {
   opacity: 0.5;
 }
 
+/* Кнопка отправки загорается, только когда в поле есть текст: пустой
+   красный квадрат выглядел как «уже можно жать», хотя отправлять нечего.
+   :has() переживает морфы Datastar — классы на кнопке сбрасывались бы. */
 .send-btn {
   flex: 0 0 auto;
   width: 42px;
   height: 42px;
   border: 0;
   border-radius: var(--radius);
-  background: var(--accent);
-  color: #fff;
+  background: #1d1d1d;
+  color: var(--faint);
   font-size: 17px;
   font-weight: 700;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .send-btn:hover {
+  background: #262626;
+  color: var(--muted);
+}
+
+.chat-form:has(input:not(:placeholder-shown)) .send-btn:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-form:has(input:not(:placeholder-shown)) .send-btn:not(:disabled):hover {
   background: var(--accent-hover);
 }
 
@@ -1898,13 +1914,6 @@ body.landing {
   font-family: var(--mono);
   letter-spacing: 0.22em;
   text-transform: uppercase;
-}
-
-.landing-foot {
-  color: var(--faint);
-  font-size: 12px;
-  font-family: var(--mono);
-  letter-spacing: 0.04em;
 }
 
 .landing-card .toast {

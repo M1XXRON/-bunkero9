@@ -145,7 +145,15 @@ function leaveButton(snap: Snapshot): string {
   return `<button class="pill pill-icon" title="Выйти" aria-label="Выйти" data-on:click="confirm('Выйти из бункера? Персонаж погибнет, его карты откроются.') && @post('/act/leave', {retry: 'never'})">×</button>`;
 }
 
-function topbar(snap: Snapshot): string {
+// Приглашение копируется одной кнопкой: код, ссылка с автоподстановкой кода
+// (?c=…) и строка, которую не стыдно отправить в чат друзьям.
+function inviteText(snap: Snapshot, origin: string): string {
+  const count = snap.players.length;
+  const who = count <= 1 ? "я уже внутри" : `нас уже ${count}`;
+  return `Тишина снаружи, а в бункере есть место. Заходи в «БУНКЕР·9» — ${who}, не хватает тебя.\nКод: ${snap.code}\n${origin}/?c=${snap.code}`;
+}
+
+function topbar(snap: Snapshot, origin: string): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
   // __ifmissing здесь нельзя: топбар морфится на каждом патче, а сигнал живёт
@@ -163,8 +171,8 @@ function topbar(snap: Snapshot): string {
   <header class="topbar" id="topbar">
     <div class="topbar-left">
       <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
-      <button class="pill room-pill" title="Скопировать код"
-        data-on:click="navigator.clipboard?.writeText('${esc(snap.code)}')">
+      <button class="pill room-pill" title="Скопировать код, ссылку и приглашение"
+        data-on:click="navigator.clipboard?.writeText(${esc(JSON.stringify(inviteText(snap, origin)))})">
         <span class="room-code">${esc(snap.code)}</span><span class="room-copy">копировать</span>
       </button>
     </div>
@@ -180,11 +188,16 @@ function topbar(snap: Snapshot): string {
     </div>
 
     <div class="topbar-right">
-      <div class="resources">
+      ${
+        // В лобби ресурсов ещё нет (все нули) — не показываем пустые банки.
+        snap.state === "lobby"
+          ? ""
+          : `<div class="resources">
         <span class="res${low(res.food, snap.aliveCount)}"><i>еда</i><b>${res.food}</b></span>
         <span class="res${low(res.energy, 2)}"><i>энергия</i><b>${res.energy}</b></span>
         <span class="res${low(res.meds, 0)}"><i>меды</i><b>${res.meds}</b></span>
-      </div>
+      </div>`
+      }
       <div class="top-actions">
         <button class="pill pill-ghost" data-on:click="document.getElementById('rules').showModal()">Правила</button>
         ${leaveButton(snap)}
@@ -885,7 +898,7 @@ export function renderApp(snap: Snapshot, origin: string, tab = "day"): string {
   const stateClass = snap.state === "lobby" ? "state-lobby" : "state-game";
   return `<div id="app" data-signals="${signals}" data-init="@get('/stream', {retry: 'always', retryMaxWait: 5000, retryMaxCount: 100000})">
     <section id="shell" class="screen ${stateClass}">
-      ${topbar(snap)}
+      ${topbar(snap, origin)}
       <div id="banner" class="phase-banner"></div>
       ${renderBoard(snap, origin, tab)}
       <dialog id="rules" class="sheet" aria-labelledby="rulesTitle">${rules(snap)}</dialog>
@@ -909,8 +922,8 @@ export function renderBoard(snap: Snapshot, origin: string, tab = "day"): string
   </main>`;
 }
 
-export function renderTopbar(snap: Snapshot): string {
-  return topbar(snap);
+export function renderTopbar(snap: Snapshot, origin: string): string {
+  return topbar(snap, origin);
 }
 
 export function renderTabs(snap: Snapshot, activeTab = "day"): string {

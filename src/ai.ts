@@ -8,6 +8,17 @@
 //   BUNKER_AI_URL=https://api.openai.com/v1
 //   BUNKER_AI_MODEL=gpt-4o-mini
 //   BUNKER_AI_TIMEOUT_MS=12000
+//   BUNKER_AI_SESSION=<id>   (необязательно; для Go-шлюза OpenCode)
+//   BUNKER_AI_REASONING=none|low|medium|high  (необязательно)
+//
+// Reasoning-модели (DeepSeek V4) по умолчанию тратят max_tokens на размышления
+// и возвращают пустой content с finish_reason=length. BUNKER_AI_REASONING=none
+// отключает это на шлюзах, которые поддерживают reasoning_effort; для моделей
+// без рассуждений параметр не нужен и не отправляется.
+//
+// OpenCode Go требует заголовок x-opencode-session: без него 400
+// MissingSessionID. Сессия стабильна на процесс — этого достаточно для
+// маршрутизации; разные комнаты всё равно ходят одним потоком вызовов.
 //
 // mock — детерминированные ответы без сети: на нём гоняются тесты.
 // content.js — CommonJS-пакет контента; берём только заголовки категорий.
@@ -19,6 +30,11 @@ const BASE = (process.env.BUNKER_AI_URL ?? "https://api.openai.com/v1").replace(
 const MODEL = process.env.BUNKER_AI_MODEL ?? "gpt-4o-mini";
 const TIMEOUT_MS = Number(process.env.BUNKER_AI_TIMEOUT_MS ?? 12000);
 const MODE = (process.env.BUNKER_AI ?? (KEY ? "live" : "off")).toLowerCase();
+// Шлюз OpenCode Go просит стабильный id сессии; остальным провайдерам
+// заголовок не нужен и может быть лишним.
+const IS_OPENCODE = BASE.includes("opencode.ai");
+const SESSION_ID = process.env.BUNKER_AI_SESSION || `bunker9-${crypto.randomUUID()}`;
+const REASONING = process.env.BUNKER_AI_REASONING || "";
 
 export const aiMode = MODE;
 export const aiEnabled = () => MODE === "live" || MODE === "mock";
@@ -39,11 +55,15 @@ async function chatJson(system: string, user: string, maxTokens = 700): Promise<
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${KEY}`,
+        // Go-шлюз просит идентифицировать клиента своим user-agent, а не SDK.
+        "user-agent": "bunker9-game/2.0",
+        ...(IS_OPENCODE ? { "x-opencode-session": SESSION_ID } : {}),
       },
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.85,
         max_tokens: maxTokens,
+        ...(REASONING ? { reasoning_effort: REASONING } : {}),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: system },
@@ -53,13 +73,28 @@ async function chatJson(system: string, user: string, maxTokens = 700): Promise<
       signal: controller.signal,
     });
     if (!res.ok) {
-      console.warn(`[ai] ${res.status} ${res.statusText}`);
+      // Тело ошибки объясняет причину (MissingSessionID, баланс, модель) —
+      // без него в логах оставался только код.
+      const body = await res.text().catch(() => "");
+      console.warn(`[ai] ${res.status} ${res.statusText}: ${body.slice(0, 200)}`);
       return null;
     }
     const data: any = await res.json();
-    const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== "string") return null;
-    return JSON.parse(text) as Json;
+    const choice = data?.choices?.[0];
+    const text = choice?.message?.content;
+    if (typeof text !== "string" || !text.trim()) {
+      console.warn(`[ai] пустой ответ (finish_reason=${choice?.finish_reason ?? "?"})`);
+      return null;
+    }
+    try {
+      return JSON.parse(text) as Json;
+    } catch {
+      // Обрезанный по max_tokens JSON — самый частый сбой: видно по finish_reason.
+      console.warn(
+        `[ai] битый JSON (finish_reason=${choice?.finish_reason ?? "?"}, ${text.length} симв.): ${text.slice(0, 120)}…${text.slice(-60)}`,
+      );
+      return null;
+    }
   } catch (error) {
     console.warn("[ai] вызов не удался:", (error as Error)?.message);
     return null;
@@ -92,7 +127,9 @@ export async function generatePersonas(
   const data = await chatJson(
     PERSONA_SYSTEM,
     `Игроков: ${names.length}. Контекст катастрофы: ${catastrophe}. Позывные: ${names.join(", ")}.`,
-    600,
+    // 5 карт × N игроков: на 15 человек 600 токенов обрезали JSON на середине
+    // (Unexpected EOF) и все карты уезжали в статичный пул.
+    900,
   );
   const list = Array.isArray(data?.players) ? (data.players as any[]) : null;
   if (!list || list.length < names.length) return null;
