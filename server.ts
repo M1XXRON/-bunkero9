@@ -989,9 +989,9 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#101010">
 <title>БУНКЕР·9 — Бункер онлайн</title>
-<link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
-<link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
+<link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=3" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
@@ -1003,9 +1003,19 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
 <header class="landing-top">
-  <a class="landing-brand" href="/" aria-label="БУНКЕР·9 — на главную">
-    <span class="brand-emblem" aria-hidden="true">9</span>
-    <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
+  <a class="landing-brand" href="/" aria-label="БУНКЕР 09 — на главную">
+    <svg class="radar-logo" width="38" height="38" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="50" height="50" rx="14" fill="#121710" stroke="#39452f" stroke-width="1.8"/>
+      <circle cx="28" cy="28" r="17" stroke="#313d28" stroke-width="1.4"/>
+      <circle cx="28" cy="28" r="9" stroke="#313d28" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <g class="radar-sweep">
+        <path d="M28 28 L42 16 A18 18 0 0 1 45 28 Z" fill="rgba(255,91,54,0.34)"/>
+        <line x1="28" y1="28" x2="42" y2="16" stroke="#ff5b36" stroke-width="2" stroke-linecap="round"/>
+      </g>
+      <circle class="radar-blip" cx="37" cy="22" r="2.3" fill="#ff5b36"/>
+      <circle class="radar-core" cx="28" cy="28" r="3" fill="#a9ce7c"/>
+    </svg>
+    <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark wordmark-pill">09</span></span>
   </a>
   <div class="landing-top-right">
     <span class="landing-status"><i></i>КАНАЛ 09 ОТКРЫТ</span>
@@ -1103,9 +1113,9 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#101010">
 <title>БУНКЕР·9 — ${snapshot.state === "lobby" ? "лобби" : "игра"}</title>
-<link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
-<link rel="icon" href="/favicon-32.png?v=1" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
+<link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=3" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">

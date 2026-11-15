@@ -1,31 +1,25 @@
 #!/usr/bin/env python3
-"""Растровые версии фавикона из public/favicon.svg (без зависимостей).
+"""Растровые версии фавикона из public/favicon.svg (Радар «Сигнал тишины»).
 
-Геометрия повторяет SVG в системе 64×64: тёмный скруглённый квадрат, тонкая
-янтарная рамка и «9» (кольцо + ножка). Пишем PNG вручную через zlib — так же,
-как scripts/make-icon.py в native-проекте: ни Pillow, ни cairo не нужны.
+Геометрия повторяет SVG в системе 64×64: тёмно-оливковый корпус #10150e,
+рамка #3d4932, концентрические кольца пеленгатора, оранжевый сектор-луч
+#ff5b36, засечка сигнала и зелёное ядро #a9ce7c.
 
     python3 tools/make-favicon.py
 """
+import math
 import struct
 import zlib
 from pathlib import Path
 
 SVG_UNITS = 64.0
-BG = (0x12, 0x15, 0x1C)
-AMBER = (0xF0, 0xB3, 0x57)
-FRAME_ALPHA = 0.35
-SS = 4  # суперсэмплинг: 4×4 подпикселя на пиксель
-
-# геометрия в единицах SVG
-CORNER = 15.0
-LOOP_C = (30.0, 25.0)
-LOOP_R = 13.0
-LOOP_W = 8.0
-STEM = ((42.5, 25.0), (42.5, 47.0))
-STEM_W = 8.0
-FRAME_INSET = 1.5
-FRAME_W = 1.5
+BG = (0x10, 0x15, 0x0E)
+BORDER = (0x3D, 0x49, 0x32)
+RING_OUTER = (0x2C, 0x37, 0x24)
+RING_INNER = (0x30, 0x3C, 0x27)
+ORANGE = (0xFF, 0x5B, 0x36)
+GREEN = (0xA9, 0xCE, 0x7C)
+SS = 4
 
 
 def rounded_box_sdf(x, y, half, radius):
@@ -44,27 +38,52 @@ def segment_dist(x, y, a, b):
     return ((x - ax - t * dx) ** 2 + (y - ay - t * dy) ** 2) ** 0.5
 
 
+def blend(base, over, alpha):
+    return (
+        round(base[0] * (1 - alpha) + over[0] * alpha),
+        round(base[1] * (1 - alpha) + over[1] * alpha),
+        round(base[2] * (1 - alpha) + over[2] * alpha),
+    )
+
+
 def sample(x, y):
-    """Цвет в точке (единицы SVG) и признак непрозрачности."""
-    box = rounded_box_sdf(x, y, SVG_UNITS / 2, CORNER)
+    box = rounded_box_sdf(x, y, 30.0, 16.0)
     if box > 0:
         return None
-    r, g, b = BG
+    color = BG
 
-    # тонкая рамка по внутреннему краю
-    if abs(box + FRAME_INSET) <= FRAME_W / 2:
-        r = round(r * (1 - FRAME_ALPHA) + AMBER[0] * FRAME_ALPHA)
-        g = round(g * (1 - FRAME_ALPHA) + AMBER[1] * FRAME_ALPHA)
-        b = round(b * (1 - FRAME_ALPHA) + AMBER[2] * FRAME_ALPHA)
+    # Рамка корпуса
+    if abs(box + 1.25) <= 1.25:
+        color = BORDER
 
-    # кольцо
-    d = ((x - LOOP_C[0]) ** 2 + (y - LOOP_C[1]) ** 2) ** 0.5
-    if abs(d - LOOP_R) <= LOOP_W / 2:
-        return AMBER
-    # ножка
-    if segment_dist(x, y, *STEM) <= STEM_W / 2:
-        return AMBER
-    return (r, g, b)
+    cx, cy = 32.0, 32.0
+    dx, dy = x - cx, y - cy
+    dist = (dx * dx + dy * dy) ** 0.5
+    ang = math.degrees(math.atan2(dy, dx))
+
+    # Концентрические кольца
+    if abs(dist - 21.0) <= 1.0:
+        color = RING_OUTER
+    elif abs(dist - 11.5) <= 0.8 and int((ang + 180.0) / 16.0) % 2 == 0:
+        color = RING_INNER
+
+    # Оранжевый сектор сканера (-40° .. 0°)
+    if dist <= 21.5 and -40.5 <= ang <= 0.0:
+        color = blend(color, ORANGE, 0.34)
+
+    # Луч сканера
+    if segment_dist(x, y, (32.0, 32.0), (49.0, 17.5)) <= 1.5:
+        color = ORANGE
+
+    # Засечка сигнала
+    if ((x - 43.0) ** 2 + (y - 24.5) ** 2) ** 0.5 <= 3.2:
+        color = ORANGE
+
+    # Центральное зелёное ядро
+    if dist <= 4.2:
+        color = GREEN
+
+    return color
 
 
 def render(size):

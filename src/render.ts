@@ -173,6 +173,18 @@ function inviteText(snap: Snapshot, origin: string): string {
   return `Тишина снаружи, а в бункере есть место. Заходи в «БУНКЕР·9» — ${who}, не хватает тебя.\nКод: ${snap.code}\n${origin}/?c=${snap.code}`;
 }
 
+const RADAR_LOGO_SVG = `<svg class="radar-logo radar-logo-sm" width="32" height="32" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+  <rect x="3" y="3" width="50" height="50" rx="14" fill="#121710" stroke="#39452f" stroke-width="1.8"/>
+  <circle cx="28" cy="28" r="17" stroke="#313d28" stroke-width="1.4"/>
+  <circle cx="28" cy="28" r="9" stroke="#313d28" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <g class="radar-sweep">
+    <path d="M28 28 L42 16 A18 18 0 0 1 45 28 Z" fill="rgba(255,91,54,0.34)"/>
+    <line x1="28" y1="28" x2="42" y2="16" stroke="#ff5b36" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <circle class="radar-blip" cx="37" cy="22" r="2.3" fill="#ff5b36"/>
+  <circle class="radar-core" cx="28" cy="28" r="3" fill="#a9ce7c"/>
+</svg>`;
+
 function topbar(snap: Snapshot, origin: string): string {
   const tone = PHASE_TONE[snap.state] || "day";
   // Таймер целиком на Datastar: интервал тикает сигнал, data-text его печатает.
@@ -194,7 +206,7 @@ function topbar(snap: Snapshot, origin: string): string {
   return `
   <header class="topbar" id="topbar">
     <div class="topbar-left">
-      <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
+      <span class="brand-lockup">${RADAR_LOGO_SVG}<span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark wordmark-pill">09</span></span></span>
       <button class="pill room-pill" title="Скопировать код, ссылку и приглашение"
         data-on:click="window.bunkerCopyInvite(${esc(JSON.stringify(inviteText(snap, origin)))})">
         <span class="room-code">${esc(snap.code)}</span><span class="room-copy">копировать</span>

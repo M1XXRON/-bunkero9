@@ -6,6 +6,93 @@
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
+/* ---------- анимированный логотип Вариант 02: Радар «Сигнал тишины» ---------- */
+
+.landing-brand,
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.radar-logo {
+  flex: 0 0 auto;
+  overflow: visible;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+  transition: transform 220ms ease-out;
+}
+
+.landing-brand:hover .radar-logo {
+  transform: scale(1.06);
+}
+
+.radar-sweep {
+  transform-origin: 28px 28px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .radar-sweep {
+    animation: radar-sweep-spin 4.2s linear infinite;
+  }
+
+  .radar-blip {
+    animation: radar-blip-pulse 2.1s ease-in-out infinite;
+  }
+
+  .radar-core {
+    animation: radar-core-breathe 3s ease-in-out infinite;
+  }
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wordmark-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #090b08;
+  font: 800 0.76em/1 var(--mono);
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 16px rgba(255, 91, 54, 0.32),
+    inset 0 1px rgba(255, 255, 255, 0.22);
+}
+
+@keyframes radar-sweep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes radar-blip-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.32;
+  }
+}
+
+@keyframes radar-core-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
 /* ---------- типографика и баланс заголовков ---------- */
 
 :where(h1, h2, h3, .intro-title, .ending-copy h3) {
