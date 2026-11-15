@@ -182,7 +182,22 @@ try {
   await send("Runtime.enable");
   await viewport(1440, 960);
   await send("Page.navigate", { url: `${SITE}/` });
-  await waitFor(async () => Boolean(await evaluate(`document.querySelector(".create-card")`)));
+  await waitFor(async () =>
+    Boolean(await evaluate(`document.querySelector(".create-card") && window.bunkerToast`)),
+  );
+  check(
+    (await evaluate(`document.querySelectorAll(".sample-card").length`)) === 3,
+    "Лендинг: нет витрины образцов карт",
+  );
+  await click(".create-card [data-random-callsign]");
+  await sleep(100);
+  check(
+    Boolean(
+      await evaluate(`document.querySelector('.create-card input[name="name"]')?.value?.trim()`),
+    ),
+    "Лендинг: кубик случайного позывного не заполнил поле",
+  );
+  await evaluate(`document.querySelector('.create-card input[name="name"]').value = ""`);
   await shot("01-landing.png");
   await viewport(390, 844);
   await shot("08-mobile-landing.png", true);

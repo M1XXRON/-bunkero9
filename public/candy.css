@@ -1,0 +1,471 @@
+/* БУНКЕР·9 — редакция 4.0 («Tactical Dossier & Glass Telemetry»).
+   Финальная полировка типографики, тактических карт, витрины на лендинге,
+   8-слотовых индикаторов выживших, быстрых реплик чата и модальных окон. */
+
+:root {
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------- типографика и баланс заголовков ---------- */
+
+:where(h1, h2, h3, .intro-title, .ending-copy h3) {
+  text-wrap: balance;
+}
+
+:where(.hero-lead, .intro-premise, .ending-copy p, .event-card p) {
+  text-wrap: pretty;
+}
+
+.room-code,
+.phase-timer,
+.res b,
+.seat-count,
+.hero-stats b,
+.intro-stats b,
+.survival-stat-head b,
+.vote-count b,
+.ending-stats b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- лендинг: витрина карт досье и генератор позывного ---------- */
+
+.hero-bottom {
+  width: min(100%, 640px);
+  padding-top: 32px;
+}
+
+.hero-sample-deck {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  perspective: 900px;
+}
+
+.sample-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 13px;
+  overflow: hidden;
+  border: 1px solid #2e3627;
+  border-radius: 12px;
+  background:
+    radial-gradient(
+      180px circle at var(--mx, 80%) var(--my, 20%),
+      rgba(255, 255, 255, 0.06),
+      transparent 70%
+    ),
+    linear-gradient(155deg, rgba(28, 33, 23, 0.92), rgba(15, 18, 13, 0.96));
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.28),
+    inset 0 1px rgba(255, 255, 255, 0.04);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+.sample-card:hover {
+  border-color: #4c5a3e;
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.38),
+    inset 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.sample-card.gain {
+  border-top: 2px solid rgba(169, 206, 124, 0.55);
+}
+
+.sample-card.drain {
+  border-top: 2px solid rgba(255, 117, 89, 0.55);
+}
+
+.sample-card.special {
+  border-top: 2px solid rgba(255, 91, 54, 0.7);
+}
+
+.sample-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sample-cat {
+  color: #7d896f;
+  font: 500 7.5px/1 var(--mono);
+  letter-spacing: 0.1em;
+}
+
+.sample-badge {
+  padding: 2px 5px;
+  border-radius: 999px;
+  font: 600 7px/1.1 var(--mono);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.sample-badge.gain {
+  color: #b7e38e;
+  background: rgba(169, 206, 124, 0.14);
+}
+
+.sample-badge.drain {
+  color: #ff9f8a;
+  background: rgba(255, 117, 89, 0.15);
+}
+
+.sample-badge.special {
+  color: #ffb89e;
+  background: rgba(255, 91, 54, 0.16);
+}
+
+.sample-card b {
+  color: #eef2e6;
+  font-family: var(--display);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sample-card small {
+  color: #879279;
+  font-size: 10.5px;
+  line-height: 1.38;
+}
+
+/* Поле позывного с кубиком случайного выбора */
+.input-with-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-action input {
+  width: 100%;
+  padding-right: 44px !important;
+}
+
+.dice-btn {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #333b2c;
+  border-radius: 7px;
+  background: rgba(24, 29, 20, 0.88);
+  color: #b8c4a6;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    transform 160ms ease-out,
+    border-color 160ms ease-out,
+    background-color 160ms ease-out;
+}
+
+.dice-btn:hover {
+  border-color: #6b7d57;
+  background: #232b1c;
+  transform: rotate(14deg) scale(1.04);
+}
+
+.dice-btn:active {
+  transform: scale(0.94);
+}
+
+/* ---------- иконки категорий и тактические карточки ---------- */
+
+.cat-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 5px;
+  color: #8ea178;
+  vertical-align: -1.5px;
+}
+
+.own-card.special .cat-ico,
+.trait-card.is-special .cat-ico {
+  color: var(--accent);
+}
+
+.trait-grid {
+  perspective: 1000px;
+}
+
+.trait-card {
+  justify-content: space-between;
+  background:
+    radial-gradient(
+      240px circle at var(--mx, 85%) var(--my, 15%),
+      rgba(255, 120, 82, 0.09),
+      transparent 68%
+    ),
+    linear-gradient(150deg, rgba(35, 42, 29, 0.62), rgba(20, 24, 17, 0.92)), #161a13;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+
+.trait-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.trait-slot {
+  padding: 2px 6px;
+  border: 1px solid #2f3827;
+  border-radius: 5px;
+  background: rgba(12, 15, 10, 0.55);
+  color: #69785a;
+  font: 600 8px/1 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.trait-card:hover:not(.revealed) .trait-slot {
+  border-color: rgba(255, 91, 54, 0.45);
+  color: #ffb39b;
+}
+
+.trait-card.is-special:not(.revealed) {
+  border-color: rgba(255, 91, 54, 0.36);
+  background:
+    radial-gradient(
+      240px circle at var(--mx, 85%) var(--my, 15%),
+      rgba(255, 91, 54, 0.14),
+      transparent 70%
+    ),
+    linear-gradient(145deg, rgba(46, 28, 21, 0.55), rgba(22, 24, 17, 0.94));
+}
+
+.trait-card.revealed {
+  position: relative;
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.trait-card.revealed::before {
+  content: "ОТКРЫТО";
+  position: absolute;
+  right: 12px;
+  bottom: 11px;
+  padding: 2px 6px;
+  border: 1px solid rgba(169, 206, 124, 0.32);
+  border-radius: 4px;
+  background: rgba(169, 206, 124, 0.07);
+  color: var(--ok);
+  font: 600 7.5px/1.1 var(--mono);
+  letter-spacing: 0.12em;
+}
+
+/* ---------- 8-слотовая шкала раскрытия у выживших ---------- */
+
+.pdots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+.pdot {
+  display: inline-block;
+  width: 6px;
+  height: 10px;
+  border: 1px solid #303927;
+  border-radius: 2px;
+  background: #141911;
+  font-size: 0;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.pdot.on {
+  border-color: rgba(169, 206, 124, 0.65);
+  background: linear-gradient(180deg, #b8df89, #7ea856);
+  box-shadow: 0 0 7px rgba(169, 206, 124, 0.28);
+}
+
+.players-row.dead .pdot.on {
+  border-color: #555;
+  background: #666;
+  box-shadow: none;
+}
+
+/* ---------- лента чата: без обрезки фаз + быстрые реплики ---------- */
+
+.chat-divider .cd-text {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.chat-hotkey-hint {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #313a28;
+  border-radius: 6px;
+  background: #151a11;
+  color: #7c8b6b;
+  font: 600 10px/1 var(--mono);
+}
+
+.chat-quick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #252c1f;
+}
+
+.quick-phrase {
+  min-height: 25px;
+  padding: 3px 9px;
+  border: 1px solid #313a28;
+  border-radius: 999px;
+  background: #171c13;
+  color: #9cac89;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease,
+    transform 120ms ease;
+}
+
+.quick-phrase:hover {
+  border-color: #6b7f55;
+  background: #20271a;
+  color: #e6eedb;
+}
+
+.quick-phrase:active {
+  transform: scale(0.96);
+}
+
+/* ---------- модалка «Правила» — модульная сетка ---------- */
+
+.sheet {
+  width: min(640px, calc(100vw - 28px));
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rule-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid #2e3726;
+  border-radius: 12px;
+  background: #141911;
+}
+
+.rule-card.highlight {
+  border-color: rgba(255, 91, 54, 0.42);
+  background: linear-gradient(135deg, rgba(255, 91, 54, 0.1), rgba(20, 25, 17, 0.95));
+}
+
+.rule-card.wide {
+  grid-column: 1 / -1;
+}
+
+.rule-num {
+  color: #82946e;
+  font: 600 8.5px/1 var(--mono);
+  letter-spacing: 0.14em;
+}
+
+.rule-card.highlight .rule-num {
+  color: var(--accent);
+}
+
+.rule-card p {
+  margin: 0;
+  color: #b7c0ab;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* ---------- тактические углы у главных карточек ---------- */
+
+.invite-card,
+.survival-brief,
+.ending-hero {
+  position: relative;
+}
+
+.invite-card::after,
+.survival-brief::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border-top: 1.5px solid rgba(169, 206, 124, 0.35);
+  border-right: 1.5px solid rgba(169, 206, 124, 0.35);
+  pointer-events: none;
+}
+
+/* ---------- адаптив ---------- */
+
+@media (max-width: 960px) {
+  .hero-sample-deck {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .hero-sample-deck {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pdot {
+    width: 4px;
+    height: 8px;
+  }
+
+  .chat-quick-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .chat-quick-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quick-phrase {
+    flex: 0 0 auto;
+  }
+
+  .rules-grid {
+    grid-template-columns: 1fr;
+  }
+}

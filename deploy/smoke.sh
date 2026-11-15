@@ -34,7 +34,7 @@ esac
 css=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/style.css")
 [ "$css" = "200" ] && ok "стиль клиента (style.css): 200" || bad "style.css: $css"
 
-for asset in redesign.css stages.css experience.js; do
+for asset in redesign.css stages.css candy.css experience.js; do
 	asset_code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/$asset")
 	[ "$asset_code" = "200" ] && ok "$asset: 200" || bad "$asset: $asset_code"
 done

@@ -376,6 +376,27 @@ const LOCK_ICON =
 const CHECK_ICON =
   '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.2 6.4l2.4 2.4 5.2-5.4"/></svg>';
 
+const CAT_ICONS: Record<string, string> = {
+  identity:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><circle cx="6" cy="4" r="2"/><path d="M2.4 10c.5-1.9 1.9-3 3.6-3s3.1 1.1 3.6 3"/></svg>',
+  body: '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><path d="M2 6h2l1.2-2.6L6.8 9 8.2 6H10"/></svg>',
+  health:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M6 2.3v7.4M2.3 6h7.4"/></svg>',
+  profession:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><rect x="1.8" y="3.6" width="8.4" height="6.4" rx="1.2"/><path d="M4.2 3.6V2.5h3.6v1.1"/></svg>',
+  hobby:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><polygon points="6,1.6 7.3,4.5 10.4,4.8 8,6.9 8.7,10 6,8.3 3.3,10 4,6.9 1.6,4.8 4.7,4.5"/></svg>',
+  baggage:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><path d="M3 4.2h6l.7 6H2.3z"/><path d="M4.3 4.2V3a1.7 1.7 0 0 1 3.4 0v1.2"/></svg>',
+  big: '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><path d="M6 1.5 10.2 3.8v4.4L6 10.5 1.8 8.2V3.8z"/><path d="M1.8 3.8 6 6.1l4.2-2.3M6 6.1v4.4"/></svg>',
+  special:
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M6.6 1.2 2.6 6.6h2.7L4.8 10.8l4.6-5.6H6.7z"/></svg>',
+};
+
+function catIcon(cat: string): string {
+  return CAT_ICONS[cat] ? `<i class="cat-ico" aria-hidden="true">${CAT_ICONS[cat]}</i>` : "";
+}
+
 function peekCard(p: Player): string {
   // Раскрытая — категория + значение зелёным. Скрытая — только категория серым,
   // вместо значения пунктир: видно, что слот есть, но содержимое неизвестно.
@@ -433,7 +454,13 @@ function playersPanel(snap: Snapshot): string {
           <span class="pname">${esc(p.name)}</span>
           ${p.isBot ? '<span class="mini-badge bot">бот</span>' : ""}
           ${status}${votes}
-          <span class="pdots" aria-label="Раскрыто ${p.traitsRevealed} из ${p.totalTraits} карт">${"●".repeat(p.traitsRevealed)}${"○".repeat(Math.max(0, p.totalTraits - p.traitsRevealed))}</span>
+          <span class="pdots" aria-label="Раскрыто ${p.traitsRevealed} из ${p.totalTraits} карт">${Array.from(
+            { length: p.totalTraits },
+            (_, idx) =>
+              idx < p.traitsRevealed
+                ? '<i class="pdot on" aria-hidden="true">●</i>'
+                : '<i class="pdot" aria-hidden="true">○</i>',
+          ).join("")}</span>
         </div>`;
     })
     .join("");
@@ -498,7 +525,7 @@ function ownCards(snap: Snapshot): string {
           ? "на столе"
           : "скрыта";
       return `<div class="own-card ${t.revealed ? "revealed" : ""} ${special ? "special" : ""}">
-        <span class="own-cat">${esc(t.label)}</span>
+        <span class="own-cat">${catIcon(t.cat)}${esc(t.label)}</span>
         <span class="own-value">${esc(t.value)}${
           special && t.desc
             ? ` <button class="ability-info" data-ability-info="${esc(t.desc)}" aria-label="Что даёт спецвозможность">i</button>`
@@ -722,13 +749,13 @@ function revealScene(snap: Snapshot): string {
     const cards = me.traits
       .map(
         (t, i) => `
-      <button class="trait-card ${t.revealed ? "revealed" : ""}" ${t.revealed ? "disabled" : ""}
+      <button class="trait-card ${t.revealed ? "revealed" : ""} ${t.cat === "special" ? "is-special" : ""}" ${t.revealed ? "disabled" : ""} data-tilt
         aria-label="${esc(t.label)}: ${esc(t.value)}. ${t.revealed ? "Уже раскрыто" : "Раскрыть карту"}"
         data-on:click="@post('/act/reveal', {payload: {index: ${i}}, retry: 'never'})">
-        <span class="trait-label">${esc(t.label)}</span>
+        <span class="trait-head"><span class="trait-label">${catIcon(t.cat)}${esc(t.label)}</span><span class="trait-slot">0${i + 1}</span></span>
         <span class="trait-value">${esc(t.value)}</span>
         ${t.effect ? `<span class="trait-eff">${esc(t.effect)}</span>` : ""}
-        <span class="trait-mark">${t.revealed ? "на столе" : "скрыто"}</span>
+        <span class="trait-mark">${t.revealed ? "✓ на столе" : "скрыто"}</span>
       </button>`,
       )
       .join("");
@@ -1153,11 +1180,24 @@ function chatPanel(snap: Snapshot, activeTab = "day"): string {
           .join("")}</div>`
       : "";
 
+  const quickChips =
+    allowed.includes("day") &&
+    activeTab === "day" &&
+    ["discussion", "vote", "reveal"].includes(snap.state)
+      ? `<div class="chat-quick-bar" aria-label="Быстрые реплики">
+          <button type="button" class="quick-phrase" data-quick-chat="У кого профессия повара или электрика?">Повар / электрик?</button>
+          <button type="button" class="quick-phrase" data-quick-chat="Проверьте прогноз еды и энергии на столе.">Сверим запасы</button>
+          <button type="button" class="quick-phrase" data-quick-chat="У кого в багаже есть еда или медикаменты?">Припасы в багаже?</button>
+          <button type="button" class="quick-phrase" data-quick-chat="Кто сегодня ещё молчал?">Кто молчит?</button>
+        </div>`
+      : "";
+
   return `
     <section class="panel chat-panel">
-      <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Чат</h2></div></header>
+      <header class="panel-head"><div><span class="eyebrow">СВЯЗЬ</span><h2>Чат</h2></div><span class="chat-hotkey-hint" title="Нажмите / для быстрого ввода">/</span></header>
       <div id="chatTabs">${tabs}</div>
       <div class="chat-feed" id="chatFeed" role="log" aria-live="polite" aria-relevant="additions" aria-label="Лента чата">${feedHtml(snap, activeTab)}</div>
+      ${quickChips}
       <form class="chat-form" data-on:submit="@post('/act/chat', {contentType: 'form'}); $msg = ''">
         <input id="chatInput" name="text" autocomplete="off" placeholder="Сообщение в ${{ day: "зал", dead: "мёртвых" }[activeTab] || "зал"}…"
           data-bind="msg" data-preserve-attr="value" ${allowed.length ? "" : "disabled"}>
@@ -1175,17 +1215,14 @@ function rules(snap: Snapshot): string {
   return `
         <button class="modal-close" data-on:click="document.getElementById('rules').close()" aria-label="Закрыть правила">×</button>
         <div class="modal-head"><span class="eyebrow">ПРОТОКОЛ «КОЛЬЦО-9»</span><h2 id="rulesTitle">Как выжить</h2></div>
-        <div class="modal-section">
-          <p><b>Цель.</b> Дожить до спасения. Оно приходит после голосования последнего дня и только если еда и энергия не на нуле: без связи сигнал не уходит. Спасаются все, кто к тому моменту жив.</p>
-          <p><b>Сценарий.</b> Партия начинается без таймера: прочитайте катастрофу и нажмите «Я прочитал». Когда прочитают все (или хост откроет день), начнётся раскрытие.</p>
-          <p><b>День.</b> По очереди раскрываете по одной своей карте, обсуждаете и голосуете. В первый день каждый раскрывает две карты. Изгнанный выбывает навсегда, его карты становятся видны. При равенстве голосов никто не уходит.</p>
-          <p><b>Карты.</b> У каждого восемь характеристик: пол и возраст, рост и вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Ранги, степени болезней и уровни навыка влияют на расход бункера.</p>
-          <p><b>Спецвозможность.</b> Одна на партию, применяется днём: обменяться картой с выжившим, вскрыть НЗ (+${nzFood} еды, +${nzEnergy} энергии, +1 медикамент) или посмотреть скрытые карты одного игрока.</p>
-          <p><b>Ресурсы.</b> Каждый день бункер тратит еду на всех живых и энергию на системы. Событие дня может добавить или отнять запасы.</p>
-          <p><b>Кризис.</b> Отдельной ночи нет: сразу после голосования бункер проверяет запасы. Если еда или энергия на нуле, он теряет одного; медикаменты могут прикрыть один такой переход.</p>
-          <p><b>Провал.</b> Бункер гибнет, если живых осталось меньше ${snap.crewMin}: системы некому обслуживать.</p>
-          <p><b>Управление.</b> Клавиша <b>/</b> открывает чат и переводит фокус в поле сообщения. Клавиша <b>Esc</b> закрывает диалог. Кнопка <b>Ⅱ</b> в шапке останавливает декоративные анимации и запоминает выбор; системная настройка уменьшенного движения учитывается всегда.</p>
-          <p><b>Голос.</b> Можно изменить выбор, пока голосование не закрыто. В актуальном статусе видно, за кого вы проголосовали или что воздержались.</p>
+        <div class="modal-section rules-grid">
+          <div class="rule-card highlight"><span class="rule-num">01 · ЦЕЛЬ</span><p><b>Цель.</b> Дожить до спасения после голосования последнего дня. Еда и энергия не должны быть на нуле, а живых — не меньше <b>${snap.crewMin}</b>.</p></div>
+          <div class="rule-card"><span class="rule-num">02 · СЦЕНАРИЙ</span><p><b>Сценарий.</b> Партия начинается без таймера: прочитайте катастрофу и нажмите «Я прочитал». Когда готовы все, начинается первый день.</p></div>
+          <div class="rule-card"><span class="rule-num">03 · ДЕНЬ И ГОЛОС</span><p><b>День.</b> В 1-й день каждый открывает по 2 карты, дальше — по 1. На голосовании можно менять выбор до закрытия; при равенстве никто не уходит.</p></div>
+          <div class="rule-card"><span class="rule-num">04 · ДОСЬЕ (8 КАРТ)</span><p><b>Карты.</b> Пол/возраст, рост/вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Открытые карты меняют суточный расход.</p></div>
+          <div class="rule-card"><span class="rule-num">05 · СПЕЦВОЗМОЖНОСТЬ</span><p><b>Спецвозможность.</b> Раз за партию днём: обменяться картой, вскрыть НЗ (+${nzFood} еды, +${nzEnergy} энергии, +1 мед) или разведать чужое досье.</p></div>
+          <div class="rule-card"><span class="rule-num">06 · ЗАПАСЫ И КРИЗИС</span><p><b>Ресурсы и кризис.</b> После голосования бункер тратит еду и энергию. Если ресурс на нуле — гибнет один выживший (медикаменты спасают один раз).</p></div>
+          <div class="rule-card wide"><span class="rule-num">07 · УПРАВЛЕНИЕ ТЕРМИНАЛОМ</span><p><b>Управление.</b> Клавиша <b>/</b> фокусирует чат, <b>Esc</b> закрывает окно, кнопка <b>Ⅱ</b> останавливает анимации. Провал наступает, если живых меньше ${snap.crewMin}.</p></div>
         </div>`;
 }
 

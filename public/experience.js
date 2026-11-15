@@ -188,4 +188,85 @@
   }).observe(document.body, { childList: true, subtree: true });
 
   syncResourceValues();
+
+  // Генератор случайного позывного на лендинге + лёгкий выбор случайного аватара.
+  const CALLSIGNS = [
+    "Ворон",
+    "Сталкер",
+    "Рысь",
+    "Кондор",
+    "Сумрак",
+    "Сигнал",
+    "Ястреб",
+    "Кварц",
+    "Искра",
+    "Тень",
+    "Север",
+    "Пепел",
+    "Тайга",
+    "Шторм",
+    "Вектор",
+    "Гранит",
+  ];
+
+  document.addEventListener("click", (event) => {
+    const dice = event.target.closest?.("[data-random-callsign]");
+    if (dice) {
+      const form = dice.closest("form");
+      const input = form?.querySelector('input[name="name"]');
+      if (input instanceof HTMLInputElement) {
+        const current = input.value.trim();
+        const pool = CALLSIGNS.filter((item) => item !== current);
+        const pick = pool[Math.floor(Math.random() * pool.length)] || CALLSIGNS[0];
+        input.value = pick;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus({ preventScroll: true });
+      }
+      const radios = form ? [...form.querySelectorAll('input[type="radio"][name="avatar"]')] : [];
+      if (radios.length) {
+        const chosen = radios[Math.floor(Math.random() * radios.length)];
+        if (chosen instanceof HTMLInputElement) chosen.checked = true;
+      }
+      return;
+    }
+
+    const quick = event.target.closest?.("[data-quick-chat]");
+    if (quick) {
+      const phrase = quick.getAttribute("data-quick-chat") || "";
+      const input = document.getElementById("chatInput");
+      if (input instanceof HTMLInputElement && !input.disabled && phrase) {
+        input.value = phrase;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus({ preventScroll: true });
+      }
+    }
+  });
+
+  // Интерактивный 3D-наклон и динамический прожектор на карточках с [data-tilt].
+  document.addEventListener("pointermove", (event) => {
+    if (root.dataset.motion === "off" || event.pointerType === "touch") return;
+    const card = event.target.closest?.("[data-tilt]");
+    if (!(card instanceof HTMLElement) || card.hasAttribute("disabled")) return;
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const px = (event.clientX - rect.left) / rect.width;
+    const py = (event.clientY - rect.top) / rect.height;
+    const rx = ((0.5 - py) * 5.5).toFixed(2);
+    const ry = ((px - 0.5) * 5.5).toFixed(2);
+    card.style.setProperty("--mx", `${Math.round(px * 100)}%`);
+    card.style.setProperty("--my", `${Math.round(py * 100)}%`);
+    card.style.setProperty("--rx", `${rx}deg`);
+    card.style.setProperty("--ry", `${ry}deg`);
+  });
+
+  document.addEventListener(
+    "pointerleave",
+    (event) => {
+      const card = event.target;
+      if (!(card instanceof HTMLElement) || !card.matches?.("[data-tilt]")) return;
+      card.style.removeProperty("--rx");
+      card.style.removeProperty("--ry");
+    },
+    true,
+  );
 })();

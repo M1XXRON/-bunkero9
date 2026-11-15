@@ -59,7 +59,8 @@ const STYLE_VER = (() => {
     const base = fs.readFileSync(`${PUBLIC}/style.css`, "utf8");
     const redesign = fs.readFileSync(`${PUBLIC}/redesign.css`, "utf8");
     const stages = fs.readFileSync(`${PUBLIC}/stages.css`, "utf8");
-    return Bun.hash(base + redesign + stages)
+    const candy = fs.readFileSync(`${PUBLIC}/candy.css`, "utf8");
+    return Bun.hash(base + redesign + stages + candy)
       .toString(36)
       .slice(0, 8);
   } catch {
@@ -993,10 +994,11 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/stages.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/candy.css?v=${STYLE_VER}">
 <script src="/experience.js" defer></script>
 <script type="module" src="/sound.js"></script>
 </head><body class="landing">
@@ -1034,6 +1036,23 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
         <div><b>08</b><span>личных карт</span></div>
         <div><b>≈20</b><span>минут на партию</span></div>
       </div>
+      <div class="hero-sample-deck" aria-label="Примеры карт досье">
+        <div class="sample-card gain" data-tilt>
+          <div class="sample-top"><span class="sample-cat">04 / ПРОФЕССИЯ</span><span class="sample-badge gain">ЕДА −50%</span></div>
+          <b>повар · 4 разряд</b>
+          <small>Смена тратит вдвое меньше пайков каждый день</small>
+        </div>
+        <div class="sample-card drain" data-tilt>
+          <div class="sample-top"><span class="sample-cat">03 / ЗДОРОВЬЕ</span><span class="sample-badge drain">+0.5 ЕДЫ/ДЕНЬ</span></div>
+          <b>астма · тяжёлая</b>
+          <small>Требует усиленного пайка или медикаментов в кризис</small>
+        </div>
+        <div class="sample-card special" data-tilt>
+          <div class="sample-top"><span class="sample-cat">08 / СПЕЦВОЗМОЖНОСТЬ</span><span class="sample-badge special">РАЗ ЗА ПАРТИЮ</span></div>
+          <b>вскрытие НЗ</b>
+          <small>Мгновенно пополняет запасы еды, энергии и медов</small>
+        </div>
+      </div>
       <a class="hero-jump" href="#access">ВОЙТИ В БУНКЕР <span aria-hidden="true">↘</span></a>
     </div>
   </section>
@@ -1045,8 +1064,11 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
       <h2>Откройте свой бункер</h2>
       <p class="form-lead">Придумайте позывной и позовите друзей.</p>
       ${problem ? `<p class="toast">${problem}</p>` : ""}
-      <label class="field">Ваш позывной
-        <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Ворон" value="${name}">
+      <label class="field"><span>Ваш позывной</span>
+        <div class="input-with-action">
+          <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Ворон" value="${name}">
+          <button type="button" class="dice-btn" data-random-callsign title="Случайный позывной" aria-label="Случайный позывной">🎲</button>
+        </div>
       </label>
       <fieldset class="avatars" aria-label="Выберите аватар">${avatars}</fieldset>
       <button class="btn btn-primary btn-wide" type="submit"><span>Создать игру</span><span class="btn-arrow" aria-hidden="true">↗</span></button>
@@ -1061,8 +1083,11 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
         <label class="field">Код комнаты
           <input name="code" maxlength="4" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="КОД" class="code-input" value="${code}">
         </label>
-        <label class="field">Ваш позывной
-          <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Лиса" value="${name}">
+        <label class="field"><span>Ваш позывной</span>
+          <div class="input-with-action">
+            <input name="name" maxlength="16" required autocomplete="nickname" spellcheck="false" placeholder="Например, Лиса" value="${name}">
+            <button type="button" class="dice-btn" data-random-callsign title="Случайный позывной" aria-label="Случайный позывной">🎲</button>
+          </div>
         </label>
       </div>
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
@@ -1086,10 +1111,11 @@ function appHtml(snapshot: any, origin: string, tab = "day"): string {
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/redesign.css?v=${STYLE_VER}">
 <link rel="stylesheet" href="/stages.css?v=${STYLE_VER}">
+<link rel="stylesheet" href="/candy.css?v=${STYLE_VER}">
 <script src="/experience.js" defer></script>
 <script type="module" src="/sound.js"></script>
 <script type="module" src="/vendor/datastar-1.0.5.js"></script>
@@ -1443,6 +1469,7 @@ Bun.serve({
       "/style.css",
       "/redesign.css",
       "/stages.css",
+      "/candy.css",
       "/experience.js",
       "/sound.js",
       "/favicon.svg",
