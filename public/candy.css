@@ -431,6 +431,264 @@
   pointer-events: none;
 }
 
+/* ---------- компактная компоновка центральной сцены (без улёта вниз) ---------- */
+
+.scene-panel:not(.intro-panel) {
+  padding: 16px 20px 18px;
+}
+
+.scene-panel .panel-head {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+
+.scene-panel .panel-head h2 {
+  font-size: 24px;
+}
+
+.phase-path {
+  margin: 0 0 10px;
+  padding: 7px 11px;
+}
+
+.event-card {
+  margin-bottom: 12px;
+  padding: 11px 14px 12px;
+}
+
+.event-head {
+  margin-bottom: 4px;
+}
+
+.event-card h3 {
+  font-size: 16.5px;
+  margin-bottom: 3px;
+}
+
+.event-card p {
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.turn-callout {
+  min-height: 44px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+}
+
+.action-block h3 {
+  margin-bottom: 6px;
+  font-size: 24px;
+}
+
+.action-block > p {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.trait-grid {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trait-card {
+  min-height: 82px;
+  padding: 11px 13px;
+  gap: 4px;
+}
+
+.trait-value {
+  font-size: 14.5px;
+  line-height: 1.28;
+}
+
+.turn-strip {
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+/* Обсуждение: компактный прогноз + больше места столу раскрытий и подсказкам */
+.discuss-rich {
+  gap: 12px;
+}
+
+.survival-brief-head {
+  padding: 9px 13px 7px;
+}
+
+.survival-stats {
+  margin: 0 13px;
+  padding: 7px 0 8px;
+}
+
+.survival-stat-head b {
+  font-size: 18px;
+}
+
+.survival-mini-meter {
+  margin: 5px 0 4px;
+}
+
+.survival-brief-foot {
+  padding: 6px 13px 8px;
+}
+
+.rb-title {
+  margin-bottom: 7px;
+}
+
+.rb-card {
+  padding: 8px 10px;
+}
+
+.rb-chips {
+  margin-top: 6px;
+}
+
+.hints {
+  padding: 10px 13px;
+}
+
+.hint-list {
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.hint {
+  font-size: 12.5px;
+}
+
+/* На обсуждении и голосовании событие дня уже знакомо по рассвету и чату —
+   делаем его супер-компактным, чтобы стол раскрытий на 6–15 человек и кнопки
+   внизу никогда не уезжали за пределы экрана. */
+#board[data-phase="discussion"] .event-card,
+#board[data-phase="vote"] .event-card {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+}
+
+#board[data-phase="discussion"] .event-card .event-head,
+#board[data-phase="vote"] .event-card .event-head {
+  margin: 0;
+  gap: 8px;
+}
+
+#board[data-phase="discussion"] .event-card .event-day,
+#board[data-phase="vote"] .event-card .event-day {
+  display: none;
+}
+
+#board[data-phase="discussion"] .event-card h3,
+#board[data-phase="vote"] .event-card h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+#board[data-phase="discussion"] .event-card p,
+#board[data-phase="vote"] .event-card p {
+  flex: 1 1 260px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#board[data-phase="discussion"] .event-card .event-effects,
+#board[data-phase="vote"] .event-card .event-effects {
+  margin-top: 0;
+}
+
+.rb-grid {
+  grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+  gap: 7px;
+}
+
+/* Липкий док для кнопок голосования и завершения хода, чтобы кнопки внизу
+   никогда не улетали под экран даже при 10–15 выживших. */
+.vote-tools {
+  position: sticky;
+  bottom: -18px;
+  z-index: 6;
+  box-shadow: 0 -10px 24px rgba(11, 12, 11, 0.85);
+}
+
+.end-turn-btn {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Финал: компактный экран + липкая панель действий внизу, чтобы кнопки никогда не улетали под экран */
+.ending-hero {
+  padding: 16px 20px;
+  gap: 18px;
+  grid-template-columns: 104px minmax(0, 1fr);
+}
+
+.ending-beacon {
+  width: 96px;
+  height: 96px;
+}
+
+.ending-beacon-core {
+  inset: 26px;
+  font-size: 24px;
+}
+
+.ending-copy {
+  gap: 6px;
+}
+
+.ending-copy h3 {
+  font-size: clamp(24px, 2.7vw, 34px);
+}
+
+.ending-copy p {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ending-stats {
+  margin: 11px 0;
+  padding: 10px 0;
+}
+
+.ending-stats b {
+  font-size: 22px;
+}
+
+.ending-columns {
+  gap: 12px;
+}
+
+.ending-roster {
+  padding: 12px 14px;
+}
+
+.end-roster {
+  margin: 10px 0 0;
+  gap: 4px;
+}
+
+.end-roster li {
+  min-height: 28px;
+  padding: 4px 0;
+}
+
+.ending-actions {
+  position: sticky;
+  bottom: -18px;
+  z-index: 6;
+  margin-top: 12px;
+  padding: 12px 0 10px;
+  border-top: 1px solid #2b3523;
+  background: linear-gradient(180deg, rgba(16, 20, 13, 0.82), #10140d 35%);
+  backdrop-filter: blur(8px);
+}
+
 /* ---------- адаптив ---------- */
 
 @media (max-width: 960px) {

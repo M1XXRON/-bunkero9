@@ -1008,7 +1008,6 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
     <span class="wordmark"><span class="wordmark-text">БУНКЕР</span><span class="wordmark-mark">·9</span></span>
   </a>
   <div class="landing-top-right">
-    <button class="icon-btn motion-toggle" type="button" data-motion-toggle aria-label="Выключить анимацию" title="Выключить анимацию"><span class="motion-pause" aria-hidden="true">Ⅱ</span><span class="motion-play" aria-hidden="true">▶</span></button>
     <span class="landing-status"><i></i>КАНАЛ 09 ОТКРЫТ</span>
     <span class="landing-top-note">бесплатно · в браузере · без установки</span>
   </div>
@@ -1053,7 +1052,6 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
           <small>Мгновенно пополняет запасы еды, энергии и медов</small>
         </div>
       </div>
-      <a class="hero-jump" href="#access">ВОЙТИ В БУНКЕР <span aria-hidden="true">↘</span></a>
     </div>
   </section>
 
@@ -1093,7 +1091,6 @@ function landingHtml(origin: string, error = "", keep: Record<string, string> = 
       <input type="hidden" name="avatar" value="${AVATARS[1]}">
       <button class="btn btn-secondary btn-wide" type="submit"><span>Подключиться к смене</span><span class="btn-arrow" aria-hidden="true">→</span></button>
     </form>
-    <p class="access-footnote"><span>↳</span> Ссылка на комнату появится после создания. Аккаунт не нужен.</p>
   </section>
 </main>
 <footer class="landing-footer"><span>БУНКЕР·9 / СИГНАЛ ТИШИНЫ</span><span>ДОВЕРЯЙТЕ. ПРОВЕРЯЙТЕ. ВЫЖИВАЙТЕ.</span></footer></body></html>`;
@@ -1472,6 +1469,7 @@ Bun.serve({
       "/candy.css",
       "/experience.js",
       "/sound.js",
+      "/logo-concepts.png",
       "/favicon.svg",
       "/favicon-32.png",
       "/apple-touch-icon.png",

@@ -230,7 +230,6 @@ function topbar(snap: Snapshot, origin: string): string {
       }
       <div class="top-actions">
         <button class="pill pill-ghost" data-on:click="document.getElementById('rules').showModal()">Правила</button>
-        <button class="pill pill-icon motion-toggle" type="button" data-motion-toggle aria-label="Выключить анимацию" title="Выключить анимацию"><span class="motion-pause" aria-hidden="true">Ⅱ</span><span class="motion-play" aria-hidden="true">▶</span></button>
         ${leaveButton(snap)}
       </div>
     </div>
@@ -1222,7 +1221,7 @@ function rules(snap: Snapshot): string {
           <div class="rule-card"><span class="rule-num">04 · ДОСЬЕ (8 КАРТ)</span><p><b>Карты.</b> Пол/возраст, рост/вес, здоровье, профессия, хобби, багаж, крупный багаж и спецвозможность. Открытые карты меняют суточный расход.</p></div>
           <div class="rule-card"><span class="rule-num">05 · СПЕЦВОЗМОЖНОСТЬ</span><p><b>Спецвозможность.</b> Раз за партию днём: обменяться картой, вскрыть НЗ (+${nzFood} еды, +${nzEnergy} энергии, +1 мед) или разведать чужое досье.</p></div>
           <div class="rule-card"><span class="rule-num">06 · ЗАПАСЫ И КРИЗИС</span><p><b>Ресурсы и кризис.</b> После голосования бункер тратит еду и энергию. Если ресурс на нуле — гибнет один выживший (медикаменты спасают один раз).</p></div>
-          <div class="rule-card wide"><span class="rule-num">07 · УПРАВЛЕНИЕ ТЕРМИНАЛОМ</span><p><b>Управление.</b> Клавиша <b>/</b> фокусирует чат, <b>Esc</b> закрывает окно, кнопка <b>Ⅱ</b> останавливает анимации. Провал наступает, если живых меньше ${snap.crewMin}.</p></div>
+          <div class="rule-card wide"><span class="rule-num">07 · УПРАВЛЕНИЕ ТЕРМИНАЛОМ</span><p><b>Управление.</b> Клавиша <b>/</b> фокусирует чат, <b>Esc</b> закрывает окно. Провал наступает, если живых меньше ${snap.crewMin}: системы некому обслуживать.</p></div>
         </div>`;
 }
 

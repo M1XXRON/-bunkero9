@@ -275,16 +275,6 @@ try {
       await evaluate(`document.querySelectorAll(".turn-callout").length === 1`),
       "Раскрытие: не показан текущий ход",
     );
-    await click(".motion-toggle");
-    check(
-      (await evaluate(`document.documentElement.dataset.motion`)) === "off",
-      "Анимация: кнопка остановки не работает",
-    );
-    await click(".motion-toggle");
-    check(
-      (await evaluate(`document.documentElement.dataset.motion`)) === "on",
-      "Анимация: повторное включение не работает",
-    );
     await viewport(390, 844);
     await evaluate(`document.querySelector('.game-grid')?.scrollTo({top: 0})`);
     await shot("11-mobile-reveal.png");
